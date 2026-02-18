@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MFAS PDV </title>
+  <link rel="stylesheet" href="style.css" />
+
+</head>
+
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logoImg" aria-hidden="true">MVS</div>
+        <div>
+          <h1>MVS TECHSOLUTION</h1>
+          
+        </div>
+      </div>
+
+      <div class="right-tools">
+        <div class="rt-row rt-top">
+          <button class="pill" type="button" id="opsTablesBtn">🍽️ Mesas</button>
+          <button class="pill" type="button" id="opsKitchenBtn">👨‍🍳 Cozinha</button>
+          <button class="pill" type="button" id="deliveryBtn">🛵 Delivery</button>
+          <button class="pill" type="button" id="reportsBtn" data-role-only="manager">📊 Relatórios</button>
+          <button class="pill" type="button" id="systemBtn">⚙️ Sistema</button>
+          <div class="pill" id="cashPill" title="Clique para abrir/fechar o caixa" data-role-only="manager">
+            <span class="dot" id="cashDot"></span>
+            <span id="cashText">Caixa: ABERTO</span>
+          </div>
+          <button class="pill" type="button" id="rolePill" title="Operador/Gerente">
+            <span class="dot" id="roleDot"></span>
+            <span id="roleText">Modo: Operador</span>
+          </button>
+          <div class="pill">🕒 <span id="clock">--:--</span></div>
+        </div>
+        <div class="rt-row rt-bottom">
+          <button class="btn slimBtn" type="button" id="newProductBtn" data-role-only="manager">
+            <span class="icon">➕</span>Cadastrar Produto
+          </button>
+          <button class="btn slimBtn" type="button" id="manageCategoriesBtn" data-role-only="manager">
+            <span class="icon">✏️</span>Editar Categorias
+          </button>
+          <button class="btn slimBtn" type="button" onclick="window.open('https://wa.me/5512933008987','_blank')">
+            <span class="icon">📲</span>Suporte
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="grid">
+      <!-- ESQUERDA: Produtos -->
+      <section class="card">
+        <div class="card-head" style="display:none">
+          <div>
+            <h2 class="title">Produtos</h2>
+          </div>
+        </div>
+
+        <div class="card-body">
+          <div class="searchRow">
+            <div class="search" role="search">
+              🔎 <input id="searchInput" placeholder="Buscar: pizza, bebida, sobremesa..." />
+            </div>
+          </div>
+
+          <div class="chips" aria-label="Categorias" id="categoryTabs"></div>
+          <h2 class="title" id="productsTitle" style="margin:10px 0 0 0; display:none">Produtos</h2>
+
+          <div class="products" id="products"></div>
+        </div>
+      </section>
+
+      <!-- DIREITA: Carrinho -->
+      <aside class="card cart">
+        <div class="cartBox">
+          <div class="cartHeader">
+            <div>
+              <h2 class="big">Pedido Atual</h2>
+              <div class="orderMeta">
+                <div class="meta" id="metaType">Entrega</div>
+                <div class="meta">Comanda</div>
+                <div class="meta" id="metaPay">Pagamento</div>
+              </div>
+            </div>
+            <div class="tag">🧾 Total</div>
+          </div>
+
+          <div class="cartItems" id="cartItems">
+            <div class="emptyState" id="emptyState">
+              Carrinho vazio 🤖🍕<br/>Clique em <b>Adicionar</b>.
+            </div>
+          </div>
+
+          <div class="totals">
+            <div class="line"><small>Subtotal</small><span id="subtotal">R$ 0,00</span></div>
+            <div class="line"><small>Desconto</small><span id="discount">R$ 0,00</span></div>
+            <div class="line"><small>Taxa</small><span id="fee">R$ 0,00</span></div>
+            <div class="line grand"><span>Total</span><span id="total">R$ 0,00</span></div>
+          </div>
+
+          <div class="ctaRow">
+            <button class="cta primary" type="button" id="finishBtn">
+              <span class="bubble">✅</span>Finalizar e Imprimir
+            </button>
+            <button class="cta secondary" type="button" id="clearBtn">
+              <span class="bubble">🧹</span>Limpar Carrinho
+            </button>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <div class="footerNote">
+      MVS TECHSOLUTION • PDV Local • comanda 80mm (não fiscal)
+      <div class="footerShortcuts">
+        Atalhos:
+        <kbd>F2</kbd> Finalizar
+        <kbd>F4</kbd> Buscar
+        <kbd>Ctrl</kbd>+<kbd>P</kbd> Reimprimir
+        <kbd>Esc</kbd> Fechar
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CADASTRAR/EDITAR PRODUTO -->
+  <div class="modalOverlay" id="productModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3 id="productModalTitle">Cadastrar Produto</h3>
+        <button class="closeX" type="button" id="productClose">✖</button>
+      </div>
+
+      <div class="modalBody">
+        <div class="formGrid">
+          <div class="field">
+            <label>Nome</label>
+            <input id="pName" placeholder="Ex: Pizza Calabresa" />
+          </div>
+          <div class="field">
+            <label>Categoria</label>
+            <select id="pCategory"></select>
+          </div>
+        </div>
+
+        <div class="field" id="pizzaSubcatBlock" style="display:none">
+            <label>Subcategoria (Pizza)</label>
+            <select id="pSubcat"></select>
+        </div>
+
+
+        <div class="formGrid">
+          <div class="field">
+            <label>Emoji</label>
+            <input id="pEmoji" placeholder="🍕" maxlength="2" />
+          </div>
+          <div class="field">
+            <label>Descrição</label>
+            <input id="pDesc" placeholder="Ex: 8 fatias • borda opcional" />
+          </div>
+        </div>
+
+        <!-- Preços -->
+        <div id="priceSingleBlock" class="field">
+          <label>Preço (R$)</label>
+          <input id="pPrice" placeholder="Ex: 12,00" inputmode="decimal" />
+          <div class="hint">Para bebidas/extras/sobremesas.</div>
+        </div>
+
+        <div id="pricePizzaBlock" style="display:none">
+          <div class="formGrid">
+            <div class="field">
+              <label>Preço P (R$)</label>
+              <input id="pPriceP" placeholder="Ex: 39,90" inputmode="decimal" />
+            </div>
+            <div class="field">
+              <label>Preço M (R$)</label>
+              <input id="pPriceM" placeholder="Ex: 49,90" inputmode="decimal" />
+            </div>
+          </div>
+          <div class="formGrid">
+            <div class="field">
+              <label>Preço G (R$)</label>
+              <input id="pPriceG" placeholder="Ex: 59,90" inputmode="decimal" />
+            </div>
+            <div class="field">
+              <label>Vai para cozinha?</label>
+              <select id="pIsKitchenPizza">
+                <option value="1" selected>Sim</option>
+                <option value="0">Não</option>
+              </select>
+            </div>
+          </div>
+          <div class="hint">Pizzas usam preço por tamanho (P/M/G).</div>
+        </div>
+
+        <div class="field" id="kitchenBlock">
+          <label>Vai para cozinha?</label>
+          <select id="pIsKitchen">
+            <option value="1" selected>Sim</option>
+            <option value="0">Não</option>
+          </select>
+        </div>
+
+      </div>
+
+      <div class="modalFooter">
+        <button class="btnGhost" type="button" id="productCancel">Cancelar</button>
+        <button class="btn" type="button" id="productSave" data-role-only="manager">
+          <span class="icon">💾</span>Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PIZZA PMG + MEIO A MEIO -->
+  <div class="modalOverlay" id="pizzaModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3 id="pizzaTitle">Montar Pizza</h3>
+        <button class="closeX" type="button" id="pizzaClose">✖</button>
+      </div>
+
+      <div class="modalBody">
+        <div class="field">
+          <label>Tamanho</label>
+          <div class="seg" id="sizeSeg">
+            <button type="button" data-size="P">P</button>
+            <button type="button" data-size="M" class="active">M</button>
+            <button type="button" data-size="G">G</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Tipo</label>
+          <div class="seg" id="halfSeg">
+            <button type="button" data-half="0" class="active">Inteira</button>
+            <button type="button" data-half="1">Meio a meio</button>
+          </div>
+        </div>
+
+        <div class="formGrid">
+          <div class="field">
+            <label>Sabor 1</label>
+            <select id="flavor1"></select>
+          </div>
+          <div class="field">
+            <label>Sabor 2 (se meio a meio)</label>
+            <select id="flavor2"></select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Observação</label>
+          <input id="pizzaNotes" placeholder="Ex: sem cebola, bem assada..." />
+        </div>
+
+        <div class="field">
+          <label>Preço calculado</label>
+          <input id="pizzaPrice" readonly />
+          <div class="hint">Regra: meio a meio = maior preço do tamanho escolhido.</div>
+        </div>
+      </div>
+
+      <div class="modalFooter">
+        <button class="btnGhost" type="button" id="pizzaCancel">Cancelar</button>
+        <button class="btn" type="button" id="pizzaAdd">
+          <span class="icon">➕</span>Adicionar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: FINALIZAR (COM PAGAMENTO) -->
+  <div class="modalOverlay" id="checkoutModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3>Finalizar Pedido</h3>
+        <button class="closeX" type="button" id="checkoutClose">✖</button>
+      </div>
+
+      <div class="modalBody">
+        <div class="formGrid">
+          <div class="field">
+            <label>Tipo</label>
+            <select id="orderType">
+              <option value="entrega" selected>Entrega</option>
+              <option value="retirada">Retirada</option>
+              <option value="mesa">Mesa</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Mesa (se for mesa)</label>
+            <input id="tableNo" placeholder="Ex: 04" />
+          </div>
+        </div>
+
+        <div class="formGrid">
+          <div class="field">
+            <label>Nome do cliente</label>
+            <input id="custName" placeholder="Ex: João" />
+          </div>
+          <div class="field">
+            <label>Telefone</label>
+            <input id="custPhone" placeholder="(11) 99999-9999" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Endereço (se entrega)</label>
+          <input id="custAddress" placeholder="Rua, nº, bairro..." />
+        </div>
+
+        <div class="formGrid" id="paymentRow">
+          <div class="field" id="paymentBlock">
+            <label>Pagamento</label>
+            <select id="paymentMethod">
+              <option value="dinheiro" selected>Dinheiro</option>
+              <option value="pix">PIX</option>
+              <option value="debito">Débito</option>
+              <option value="credito">Crédito</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Total</label>
+            <input id="checkoutTotal" readonly />
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Observação geral</label>
+          <textarea id="orderNotes" placeholder="Ex: entregar no portão..."></textarea>
+        </div>
+      </div>
+
+      <div class="modalFooter">
+        <button class="btnGhost" type="button" id="checkoutCancel">Cancelar</button>
+        <button class="btn" type="button" id="checkoutConfirm">
+          <span class="icon">🖨️</span>Salvar e Imprimir
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: MESAS -->
+  <div class="modalOverlay" id="opsTablesModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3>Mesas Abertas</h3>
+        <div style="display:flex; gap:8px; align-items:center">
+          <button class="btnGhost" type="button" id="opsTablesRefresh">Atualizar</button>
+          <button class="closeX" type="button" id="opsTablesClose">✖</button>
+        </div>
+      </div>
+
+      <div class="modalBody">
+        <div class="opsCard">
+          <div class="opsTitle">Mesas Abertas</div>
+          <div id="opsTables"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: COZINHA -->
+  <div class="modalOverlay" id="opsKitchenModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3>Cozinha • Em preparo</h3>
+        <div style="display:flex; gap:8px; align-items:center">
+          <button class="btnGhost" type="button" id="opsKitchenRefresh">Atualizar</button>
+          <button class="closeX" type="button" id="opsKitchenClose">✖</button>
+        </div>
+      </div>
+
+      <div class="modalBody">
+        <div class="opsCard">
+          <div class="opsTitle">Em preparo</div>
+          <div id="opsKitchen"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: DELIVERY -->
+  <div class="modalOverlay" id="deliveryModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3>Delivery • Em preparo</h3>
+        <div style="display:flex; gap:8px; align-items:center">
+          <button class="btnGhost" type="button" id="deliveryRefresh">Atualizar</button>
+          <button class="closeX" type="button" id="deliveryClose">✖</button>
+        </div>
+      </div>
+
+      <div class="modalBody">
+        <div class="opsCard">
+          <div class="opsTitle">Em preparo</div>
+          <div id="deliveryList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: RELATÓRIOS -->
+  <div class="modalOverlay" id="reportsModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3>Relatórios</h3>
+        <button class="closeX" type="button" id="reportsClose">✖</button>
+      </div>
+
+      <div class="modalBody">
+        <div class="field">
+          <label>Data base</label>
+          <input id="reportDate" type="date" />
+          <div class="hint">Use a data para gerar o relatório diário, mensal ou anual.</div>
+        </div>
+
+        <div class="reportGrid" id="reportGrid">
+          <div class="reportCard">
+            <div>
+              <div class="reportTitle">📅 Diário</div>
+              <div class="reportMeta">Vendas do dia selecionado.</div>
+            </div>
+            <button class="btn reportBtn" type="button" data-report="day">
+              <span class="icon">🖨️</span>Gerar
+            </button>
+          </div>
+
+          <div class="reportCard">
+            <div>
+              <div class="reportTitle">🗓️ Mensal</div>
+              <div class="reportMeta">Vendas do mês da data selecionada.</div>
+            </div>
+            <button class="btn reportBtn" type="button" data-report="month">
+              <span class="icon">🖨️</span>Gerar
+            </button>
+          </div>
+
+          <div class="reportCard">
+            <div>
+              <div class="reportTitle">📆 Anual</div>
+              <div class="reportMeta">Vendas do ano da data selecionada.</div>
+            </div>
+            <button class="btn reportBtn" type="button" data-report="year">
+              <span class="icon">🖨️</span>Gerar
+            </button>
+          </div>
+
+          <div class="reportCard">
+            <div>
+              <div class="reportTitle">🧾 Último fechamento</div>
+              <div class="reportMeta">Reabre o relatório do último caixa fechado.</div>
+            </div>
+            <button class="btn reportBtn" type="button" data-report="last">
+              <span class="icon">🖨️</span>Abrir
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: SISTEMA / DIAGNÓSTICO -->
+  <div class="modalOverlay" id="systemModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3>⚙️ Sistema</h3>
+        <button class="closeX" type="button" id="systemClose">✖</button>
+      </div>
+
+      <div class="modalBody">
+        <div class="sysGrid">
+          <div class="sysCard">
+            <div class="sysTitle">Acesso</div>
+            <div class="field">
+              <label>PIN do gerente</label>
+              <input id="managerPinInput" type="password" placeholder="Digite o PIN" />
+            </div>
+            <div class="formGrid">
+              <button class="btn" type="button" id="managerLoginBtn">Entrar como gerente</button>
+              <button class="btnGhost" type="button" id="managerLogoutBtn">Sair para operador</button>
+            </div>
+            <div class="field">
+              <label>Novo PIN (mín. 4)</label>
+              <input id="managerNewPinInput" type="password" placeholder="Definir novo PIN" />
+            </div>
+            <button class="btnGhost" type="button" id="managerSetPinBtn" data-role-only="manager">Alterar PIN</button>
+            <div class="hint" id="roleHint">Dica: o PIN padrão é 1234 (troque no primeiro uso).</div>
+          </div>
+
+          <div class="sysCard compact">
+            <div class="sysTitle">Backup</div>
+            <div class="formGrid">
+              <button class="btn" type="button" id="backupExportBtn" data-role-only="manager">
+                <span class="icon">⬇️</span>Exportar
+              </button>
+              <button class="btnGhost" type="button" id="backupImportBtn" data-role-only="manager">Importar</button>
+            </div>
+            <div class="field">
+              <label>Backup automático diário</label>
+              <div class="switchRow">
+                <input type="checkbox" id="autoBackupToggle" />
+                <span>Ativar backup automático (23:50)</span>
+              </div>
+            </div>
+            <div class="formGrid">
+              <div class="field">
+                <label>IMPORTAR CARDAPIO</label>
+                <button class="btnGhost" type="button" id="importXmlBtn" data-role-only="manager">Importar XML</button>
+              </div>
+            </div>
+            <div class="formGrid">
+              <button class="btnGhost" type="button" id="backupRestoreBtn" data-role-only="manager">Restaurar backup de ontem</button>
+            </div>
+            <input id="backupFileInput" type="file" accept=".sqlite,.db" style="display:none" />
+            <input id="xmlFileInput" type="file" accept=".xml,text/xml" style="display:none" />
+            <div class="hint" id="backupHint">Backup automático ativo.</div>
+          </div>
+
+          <div class="sysCard">
+            <div class="sysTitle">Diagnóstico</div>
+            <div class="diagBox" id="diagInfo">Carregando...</div>
+            <div class="formGrid">
+              <button class="btnGhost" type="button" id="diagRefreshBtn">Atualizar</button>
+              <button class="btnGhost" type="button" id="logClearBtn" data-role-only="manager">Limpar logs</button>
+              <button class="btnGhost" type="button" id="cancelSaleBtn">Cancelar venda</button>
+            </div>
+            <div class="logList" id="logList"></div>
+          </div>
+
+          <div class="sysCard">
+            <div class="sysTitle">Atalhos</div>
+            <div class="shortcutList">
+              <div><kbd>F2</kbd> Finalizar pedido</div>
+              <div><kbd>F4</kbd> Buscar produto</div>
+              <div><kbd>Ctrl</kbd>+<kbd>P</kbd> Reimprimir último</div>
+              <div><kbd>Esc</kbd> Fechar modal</div>
+            </div>
+            <div class="sysMini">
+              <div><span>Modo</span><b id="miniRole">-</b></div>
+              <div><span>Caixa</span><b id="miniCash">-</b></div>
+              <div><span>Storage</span><b id="miniStorage">-</b></div>
+              <div><span>Status</span><b id="miniOnline">-</b></div>
+            </div>
+            <div class="hint">Dica: use o mouse no topo para abrir Mesas, Cozinha e Delivery rapidamente.</div>
+            <div class="hint">Dica: clique em um item da cozinha para marcar como pronto.</div>
+            <div class="hint">Dica: no Delivery, “Despachar” muda para “Finalizar”.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: LOGIN GERENTE -->
+  <div class="modalOverlay" id="managerLoginModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3>🔐 Acesso Gerente</h3>
+        <button class="closeX" type="button" id="managerLoginClose">✖</button>
+      </div>
+      <div class="modalBody">
+        <div class="sysCard">
+          <div class="sysTitle">Acesso</div>
+          <div class="field">
+            <label>PIN do gerente</label>
+            <input id="managerPinInputLogin" type="password" placeholder="Digite o PIN" />
+          </div>
+          <button class="btn" type="button" id="managerLoginBtnModal">Entrar como gerente</button>
+          <div class="hint">Dica: o PIN padrão é 1234 (troque no primeiro uso).</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CANCELAR/EDITAR VENDAS -->
+  <div class="modalOverlay" id="salesModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3>🧾 Vendas do Dia</h3>
+        <div style="display:flex; gap:8px; align-items:center">
+          <button class="btnGhost" type="button" id="salesRefresh">Atualizar</button>
+          <button class="closeX" type="button" id="salesClose">✖</button>
+        </div>
+      </div>
+      <div class="modalBody">
+        <div class="field">
+          <label>Data</label>
+          <input id="salesDate" type="date" />
+        </div>
+        <div class="opsCard">
+          <div class="opsTitle">Lista</div>
+          <div id="salesList"></div>
+        </div>
+        <div class="opsCard" id="salesEditCard" style="display:none">
+          <div class="opsTitle">Editar venda</div>
+          <div class="formGrid">
+            <div class="field">
+              <label>Tipo</label>
+              <select id="salesEditType">
+                <option value="entrega">Entrega</option>
+                <option value="retirada">Retirada</option>
+                <option value="mesa">Mesa</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Mesa</label>
+              <input id="salesEditTable" placeholder="Número da mesa" />
+            </div>
+          </div>
+          <div class="formGrid">
+            <div class="field">
+              <label>Cliente</label>
+              <input id="salesEditName" placeholder="Nome do cliente" />
+            </div>
+            <div class="field">
+              <label>Telefone</label>
+              <input id="salesEditPhone" placeholder="Telefone" />
+            </div>
+          </div>
+          <div class="field">
+            <label>Endereço</label>
+            <input id="salesEditAddress" placeholder="Endereço" />
+          </div>
+          <div class="field">
+            <label>Observações</label>
+            <input id="salesEditNotes" placeholder="Observações" />
+          </div>
+          <div class="field">
+            <label>Pagamento</label>
+            <select id="salesEditPayment">
+              <option value="">—</option>
+              <option value="dinheiro">Dinheiro</option>
+              <option value="pix">Pix</option>
+              <option value="debito">Débito</option>
+              <option value="credito">Crédito</option>
+            </select>
+          </div>
+          <div class="modalFooter" style="padding:0; margin-top:6px">
+            <button class="btnGhost" type="button" id="salesEditCancel">Cancelar</button>
+            <button class="btn" type="button" id="salesEditSave">Salvar alterações</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CONFIRMAÇÃO -->
+  <div class="modalOverlay" id="confirmModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3 id="confirmTitle">Confirmação</h3>
+        <button class="closeX" type="button" id="confirmClose">✖</button>
+      </div>
+      <div class="modalBody">
+        <div class="diagBox" id="confirmMessage">Tem certeza?</div>
+      </div>
+      <div class="modalFooter">
+        <button class="btnGhost" type="button" id="confirmCancel">Cancelar</button>
+        <button class="btn" type="button" id="confirmOk">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CATEGORIAS -->
+  <div class="modalOverlay" id="categoryModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3>🏷️ Categorias</h3>
+        <button class="closeX" type="button" id="categoryClose">✖</button>
+      </div>
+      <div class="modalBody">
+        <div class="catEditor" id="categoryList"></div>
+        <div class="formGrid" id="categoryAddBox">
+          <div class="field">
+            <label>Nova categoria</label>
+            <input id="categoryAddName" placeholder="Ex: Lanches, Açaí" />
+          </div>
+          <div class="field">
+            <label>Emoji</label>
+            <div class="emojiRow">
+              <input id="categoryAddEmoji" placeholder="🍔" />
+              <button class="miniBtn" type="button" id="categoryEmojiToggle">Escolher ▾</button>
+            </div>
+          </div>
+        </div>
+        <div class="hint">Dica: edite nome/emoji. Para excluir, a categoria deve estar sem produtos.</div>
+      </div>
+      <div class="modalFooter">
+        <button class="btnGhost" type="button" id="categoryCancel">Fechar</button>
+        <button class="btnGhost" type="button" id="categoryAddBtn">Adicionar Categoria</button>
+        <button class="btn" type="button" id="categorySave" data-role-only="manager">Salvar Alterações</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EMOJIS -->
+  <div class="modalOverlay" id="emojiModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3>😀 Escolher Emoji</h3>
+        <button class="closeX" type="button" id="emojiClose">✖</button>
+      </div>
+      <div class="modalBody">
+        <div class="emojiGrid" id="emojiGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRINT MODAL -->
+  <div class="modalOverlay printModal" id="printModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3>Impressão</h3>
+        <div class="modalActions">
+          <button class="btnGhost" type="button" id="printSave">Salvar PDF</button>
+          <button class="btnGhost" type="button" id="printDo">Imprimir</button>
+          <button class="closeX" type="button" id="printClose">✖</button>
+        </div>
+      </div>
+      <div class="modalBody printBody">
+        <iframe class="printFrame" id="printFrame" title="Pré-visualização da impressão"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOASTS -->
+  <div class="toastStack" id="toastStack" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="app.js" defer></script>
+
+</body>
+</html>
