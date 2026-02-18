@@ -1,0 +1,126 @@
+<cardapio>
+  <!-- TRADICIONAIS -->
+  <produto><nome>Calabresa</nome><categoria>pizzas</categoria><emoji>🍕</emoji><descricao>Calabresa e cebola</descricao><cozinha>true</cozinha><precos><p>39.90</p><m>49.90</m><g>59.90</g></precos></produto>
+  <produto><nome>Mussarela</nome><categoria>pizzas</categoria><emoji>🧀</emoji><descricao>Mussarela e tomate</descricao><cozinha>true</cozinha><precos><p>37.90</p><m>47.90</m><g>57.90</g></precos></produto>
+  <produto><nome>Marguerita</nome><categoria>pizzas</categoria><emoji>🍅</emoji><descricao>Mussarela, tomate e manjericão</descricao><cozinha>true</cozinha><precos><p>39.90</p><m>49.90</m><g>59.90</g></precos></produto>
+  <produto><nome>Portuguesa</nome><categoria>pizzas</categoria><emoji>🥚</emoji><descricao>Presunto, ovo, cebola e azeitona</descricao><cozinha>true</cozinha><precos><p>42.90</p><m>54.90</m><g>64.90</g></precos></produto>
+  <produto><nome>Presunto e Mussarela</nome><categoria>pizzas</categoria><emoji>🍖</emoji><descricao>Presunto e queijo</descricao><cozinha>true</cozinha><precos><p>39.90</p><m>49.90</m><g>59.90</g></precos></produto>
+  <produto><nome>Napolitana</nome><categoria>pizzas</categoria><emoji>🍅</emoji><descricao>Mussarela, tomate e parmesão</descricao><cozinha>true</cozinha><precos><p>39.90</p><m>49.90</m><g>59.90</g></precos></produto>
+  <produto><nome>Frango com Catupiry</nome><categoria>pizzas</categoria><emoji>🍗</emoji><descricao>Frango desfiado e catupiry</descricao><cozinha>true</cozinha><precos><p>44.90</p><m>56.90</m><g>66.90</g></precos></produto>
+  <produto><nome>Atum</nome><categoria>pizzas</categoria><emoji>🐟</emoji><descricao>Atum e cebola</descricao><cozinha>true</cozinha><precos><p>44.90</p><m>56.90</m><g>66.90</g></precos></produto>
+  <produto><nome>Baiana</nome><categoria>pizzas</categoria><emoji>🌶️</emoji><descricao>Calabresa apimentada</descricao><cozinha>true</cozinha><precos><p>41.90</p><m>52.90</m><g>62.90</g></precos></produto>
+
+  <!-- QUEIJOS -->
+  <produto><nome>4 Queijos</nome><categoria>pizzas</categoria><emoji>🧀</emoji><descricao>Mussarela, provolone, parmesão e gorgonzola</descricao><cozinha>true</cozinha><precos><p>45.90</p><m>58.90</m><g>68.90</g></precos></produto>
+  <produto><nome>Provolone</nome><categoria>pizzas</categoria><emoji>🧀</emoji><descricao>Provolone e tomate</descricao><cozinha>true</cozinha><precos><p>44.90</p><m>56.90</m><g>66.90</g></precos></produto>
+  <produto><nome>Gorgonzola</nome><categoria>pizzas</categoria><emoji>🧀</emoji><descricao>Gorgonzola e cebola</descricao><cozinha>true</cozinha><precos><p>46.90</p><m>59.90</m><g>69.90</g></precos></produto>
+
+  <!-- ESPECIAIS SALGADAS -->
+  <produto><nome>Peperoni</nome><categoria>pizzas</categoria><emoji>🥓</emoji><descricao>Peperoni e mussarela</descricao><cozinha>true</cozinha><precos><p>46.90</p><m>59.90</m><g>69.90</g></precos></produto>
+  <produto><nome>Bacon</nome><categoria>pizzas</categoria><emoji>🥓</emoji><descricao>Bacon e mussarela</descricao><cozinha>true</cozinha><precos><p>44.90</p><m>56.90</m><g>66.90</g></precos></produto>
+  <produto><nome>Banana da Terra com Bacon</nome><categoria>pizzas</categoria><emoji>🍌</emoji><descricao>Banana da terra e bacon</descricao><cozinha>true</cozinha><precos><p>45.90</p><m>58.90</m><g>68.90</g></precos></produto>
+  <produto><nome>Carne Seca com Catupiry</nome><categoria>pizzas</categoria><emoji>🥩</emoji><descricao>Carne seca desfiada e catupiry</descricao><cozinha>true</cozinha><precos><p>49.90</p><m>62.90</m><g>72.90</g></precos></produto>
+  <produto><nome>Strogonoff de Frango</nome><categoria>pizzas</categoria><emoji>🍗</emoji><descricao>Strogonoff de frango e batata palha</descricao><cozinha>true</cozinha><precos><p>48.90</p><m>61.90</m><g>71.90</g></precos></produto>
+  <produto><nome>Strogonoff de Carne</nome><categoria>pizzas</categoria><emoji>🥩</emoji><descricao>Strogonoff de carne e batata palha</descricao><cozinha>true</cozinha><precos><p>49.90</p><m>62.90</m><g>72.90</g></precos></produto>
+  <produto><nome>Brócolis com Bacon</nome><categoria>pizzas</categoria><emoji>🥦</emoji><descricao>Brócolis e bacon</descricao><cozinha>true</cozinha><precos><p>46.90</p><m>59.90</m><g>69.90</g></precos></produto>
+  <produto><nome>Milho com Bacon</nome><categoria>pizzas</categoria><emoji>🌽</emoji><descricao>Milho e bacon</descricao><cozinha>true</cozinha><precos><p>44.90</p><m>56.90</m><g>66.90</g></precos></produto>
+  <produto><nome>Palmito</nome><categoria>pizzas</categoria><emoji>🌴</emoji><descricao>Palmito e mussarela</descricao><cozinha>true</cozinha><precos><p>45.90</p><m>58.90</m><g>68.90</g></precos></produto>
+  <produto><nome>Palmito com Catupiry</nome><categoria>pizzas</categoria><emoji>🌴</emoji><descricao>Palmito e catupiry</descricao><cozinha>true</cozinha><precos><p>47.90</p><m>60.90</m><g>70.90</g></precos></produto>
+  <produto><nome>Vegetariana</nome><categoria>pizzas</categoria><emoji>🥬</emoji><descricao>Legumes e mussarela</descricao><cozinha>true</cozinha><precos><p>44.90</p><m>56.90</m><g>66.90</g></precos></produto>
+  <produto><nome>Rúcula com Tomate Seco</nome><categoria>pizzas</categoria><emoji>🥗</emoji><descricao>Rúcula e tomate seco</descricao><cozinha>true</cozinha><precos><p>48.90</p><m>61.90</m><g>71.90</g></precos></produto>
+
+  <!-- DOCES (se quiser manter em pizzas) -->
+  <produto><nome>Chocolate</nome><categoria>pizzas</categoria><emoji>🍫</emoji><descricao>Chocolate ao leite</descricao><cozinha>true</cozinha><precos><p>44.90</p><m>56.90</m><g>66.90</g></precos></produto>
+  <produto><nome>Chocolate com Morango</nome><categoria>pizzas</categoria><emoji>🍓</emoji><descricao>Chocolate e morango</descricao><cozinha>true</cozinha><precos><p>46.90</p><m>59.90</m><g>69.90</g></precos></produto>
+  <produto><nome>Banana com Canela</nome><categoria>pizzas</categoria><emoji>🍌</emoji><descricao>Banana e canela</descricao><cozinha>true</cozinha><precos><p>42.90</p><m>54.90</m><g>64.90</g></precos></produto>
+  <produto><nome>Romeu e Julieta</nome><categoria>pizzas</categoria><emoji>🧀</emoji><descricao>Goiabada e queijo</descricao><cozinha>true</cozinha><precos><p>44.90</p><m>56.90</m><g>66.90</g></precos></produto>
+
+  <!-- LANCHES BÁSICOS -->
+  <produto>
+    <nome>X-Burger</nome>
+    <categoria>lanches</categoria>
+    <emoji>🍔</emoji>
+    <descricao>Pão, hambúrguer e queijo</descricao>
+    <cozinha>true</cozinha>
+    <precos>
+      <u>18.90</u>
+    </precos>
+  </produto>
+
+  <produto>
+    <nome>X-Salada</nome>
+    <categoria>lanches</categoria>
+    <emoji>🥬</emoji>
+    <descricao>Pão, hambúrguer, queijo, alface e tomate</descricao>
+    <cozinha>true</cozinha>
+    <precos>
+      <u>20.90</u>
+    </precos>
+  </produto>
+
+  <produto>
+    <nome>X-Bacon</nome>
+    <categoria>lanches</categoria>
+    <emoji>🥓</emoji>
+    <descricao>Pão, hambúrguer, queijo e bacon</descricao>
+    <cozinha>true</cozinha>
+    <precos>
+      <u>22.90</u>
+    </precos>
+  </produto>
+
+  <produto>
+    <nome>X-Bacon Salada</nome>
+    <categoria>lanches</categoria>
+    <emoji>🥓</emoji>
+    <descricao>Pão, hambúrguer, queijo, bacon, alface e tomate</descricao>
+    <cozinha>true</cozinha>
+    <precos>
+      <u>24.90</u>
+    </precos>
+  </produto>
+
+  <produto>
+    <nome>X-Egg</nome>
+    <categoria>lanches</categoria>
+    <emoji>🍳</emoji>
+    <descricao>Pão, hambúrguer, queijo e ovo</descricao>
+    <cozinha>true</cozinha>
+    <precos>
+      <u>22.90</u>
+    </precos>
+  </produto>
+
+  <produto>
+    <nome>X-Egg Bacon</nome>
+    <categoria>lanches</categoria>
+    <emoji>🍳</emoji>
+    <descricao>Pão, hambúrguer, queijo, ovo e bacon</descricao>
+    <cozinha>true</cozinha>
+    <precos>
+      <u>25.90</u>
+    </precos>
+  </produto>
+
+  <produto>
+    <nome>Misto Quente</nome>
+    <categoria>lanches</categoria>
+    <emoji>🥪</emoji>
+    <descricao>Pão, presunto e queijo</descricao>
+    <cozinha>true</cozinha>
+    <precos>
+      <u>14.90</u>
+    </precos>
+  </produto>
+
+  <produto>
+    <nome>Hambúrguer Simples</nome>
+    <categoria>lanches</categoria>
+    <emoji>🍔</emoji>
+    <descricao>Pão e hambúrguer</descricao>
+    <cozinha>true</cozinha>
+    <precos>
+      <u>15.90</u>
+    </precos>
+  </produto>
+</cardapio>
