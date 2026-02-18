@@ -58,6 +58,22 @@
       return Number.isFinite(v) ? v : NaN;
     }
 
+    const PAYMENT_METHOD_LABELS = Object.freeze({
+      dinheiro: "Dinheiro",
+      pix: "PIX",
+      debito: "Débito",
+      credito: "Crédito",
+    });
+
+    function paymentMethodLabel(method){
+      const key = String(method || "").toLowerCase();
+      return PAYMENT_METHOD_LABELS[key] || prettyType(key);
+    }
+
+    function roundMoney(value){
+      return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+    }
+
     // ===== Demo Storage Mode (Web/Vercel sem SQLite) =====
     function shouldUseDemoStorageMode(){
       const params = new URLSearchParams(window.location.search);
@@ -196,11 +212,29 @@
 
       function demoPaymentBucket(payment){
         const pm = String(payment || "").toLowerCase();
+        if (pm.includes("divid")) return "outros";
         if (pm.includes("din")) return "dinheiro";
         if (pm.includes("pix")) return "pix";
         if (pm.includes("deb")) return "debito";
         if (pm.includes("cre")) return "credito";
         return "outros";
+      }
+
+      function demoNormalizePaymentSplits(order){
+        const raw = Array.isArray(order?.payment_splits) ? order.payment_splits : [];
+        const out = [];
+        for (const row of raw){
+          const method = String(row?.method || "").trim().toLowerCase();
+          const amount = Number(row?.amount);
+          if (!method) continue;
+          if (!Number.isFinite(amount) || amount <= 0) continue;
+          out.push({
+            person_name: String(row?.person_name || "").trim(),
+            method,
+            amount: roundMoney(amount),
+          });
+        }
+        return out;
       }
 
       function demoOrderTotal(db, orderId){
@@ -222,6 +256,7 @@
             id: Number(o.id),
             order_number: Number(o.order_number || 0),
             payment_method: o.payment_method || "",
+            payment_splits: demoNormalizePaymentSplits(o),
             created_at: o.created_at || demoNowIso(),
             total: demoOrderTotal(db, o.id),
           }))
@@ -232,7 +267,22 @@
         for (const row of rows){
           const t = Number(row.total || 0);
           totalGeral += t;
-          byPay[demoPaymentBucket(row.payment_method)] += t;
+          const splits = Array.isArray(row.payment_splits) ? row.payment_splits : [];
+          if (splits.length){
+            let splitTotal = 0;
+            for (const split of splits){
+              const amount = Number(split.amount || 0);
+              if (!Number.isFinite(amount) || amount <= 0) continue;
+              splitTotal += amount;
+              byPay[demoPaymentBucket(split.method)] += amount;
+            }
+            const missing = roundMoney(t - splitTotal);
+            if (missing > 0){
+              byPay[demoPaymentBucket(row.payment_method)] += missing;
+            }
+          } else {
+            byPay[demoPaymentBucket(row.payment_method)] += t;
+          }
         }
         return { rows, byPay, totalGeral };
       }
@@ -320,6 +370,14 @@ ${bodyHtml}
       function demoBuildOrderPrintHtml(order, items){
         const dt = order?.created_at ? new Date(order.created_at).toLocaleString("pt-BR") : "-";
         const total = items.reduce((acc, it) => acc + (Number(it.qty || 0) * Number(it.unit_price || 0)), 0);
+        const splits = demoNormalizePaymentSplits(order);
+        const paymentSummary = splits.length
+          ? "DIVIDIDO"
+          : String(order?.payment_method || "-").toUpperCase();
+        const splitRows = splits.map((split, idx) => {
+          const person = split.person_name || `Pessoa ${idx + 1}`;
+          return `<div class="muted">• ${escapeHtml(person)} • ${escapeHtml(paymentMethodLabel(split.method).toUpperCase())}: ${escapeHtml(brl(split.amount || 0))}</div>`;
+        }).join("");
         const rows = items.map((it) => {
           const line = Number(it.qty || 0) * Number(it.unit_price || 0);
           const notes = String(it.notes || "").trim();
@@ -340,7 +398,8 @@ ${bodyHtml}
               <div><b>Tipo:</b> ${escapeHtml(String(order?.order_type || "-").toUpperCase())}</div>
               <div><b>Mesa:</b> ${escapeHtml(order?.table_no || "-")}</div>
               <div><b>Cliente:</b> ${escapeHtml(order?.customer_name || "-")}</div>
-              <div><b>Pagamento:</b> ${escapeHtml(String(order?.payment_method || "-").toUpperCase())}</div>
+              <div><b>Pagamento:</b> ${escapeHtml(paymentSummary)}</div>
+              ${splitRows ? `<div>${splitRows}</div>` : ""}
             </div>
             <div class="box">
               <table>
@@ -356,14 +415,19 @@ ${bodyHtml}
       function demoBuildReportHtml(title, startIso, endIso, report){
         const dtStart = new Date(startIso).toLocaleString("pt-BR");
         const dtEnd = new Date(endIso).toLocaleString("pt-BR");
-        const rows = report.rows.map((r) => `
+        const rows = report.rows.map((r) => {
+          const payLabel = (Array.isArray(r.payment_splits) && r.payment_splits.length)
+            ? "DIVIDIDO"
+            : String(r.payment_method || "-").toUpperCase();
+          return `
           <tr>
             <td>#${escapeHtml(String(r.order_number || "-"))}</td>
-            <td>${escapeHtml(String(r.payment_method || "-").toUpperCase())}</td>
+            <td>${escapeHtml(payLabel)}</td>
             <td>${escapeHtml(new Date(r.created_at).toLocaleString("pt-BR"))}</td>
             <td>${escapeHtml(brl(r.total || 0))}</td>
           </tr>
-        `).join("");
+        `;
+        }).join("");
 
         return demoHtmlPage(
           title,
@@ -591,6 +655,7 @@ ${bodyHtml}
               address: String(o.address || ""),
               notes: String(o.notes || ""),
               payment_method: String(o.payment_method || ""),
+              payment_splits: demoNormalizePaymentSplits(o),
               status: String(o.status || ""),
               total: demoOrderTotal(db, o.id)
             }))
@@ -611,6 +676,12 @@ ${bodyHtml}
           order.address = String(payload.address || order.address || "");
           order.notes = String(payload.notes || order.notes || "");
           order.payment_method = String(payload.payment_method || order.payment_method || "");
+          if (Array.isArray(payload.payment_splits)){
+            order.payment_splits = demoNormalizePaymentSplits({ payment_splits: payload.payment_splits });
+          } else if (Object.prototype.hasOwnProperty.call(payload || {}, "payment_method")) {
+            const pm = String(payload.payment_method || "").toLowerCase();
+            if (!pm.includes("divid")) order.payment_splits = [];
+          }
           demoSaveDb(db);
           return demoJson({ ok: true });
         }
@@ -702,6 +773,7 @@ ${bodyHtml}
           order.address = payload.address || order.address || "";
           order.notes = payload.notes || order.notes || "";
           order.payment_method = payment;
+          order.payment_splits = demoNormalizePaymentSplits({ payment_splits: payload.payment_splits });
           order.status = "FECHADO";
 
           demoSaveDb(db);
@@ -767,6 +839,7 @@ ${bodyHtml}
               address: String(payload.address || ""),
               notes: String(payload.notes || ""),
               payment_method: String(payload.payment_method || ""),
+              payment_splits: demoNormalizePaymentSplits({ payment_splits: payload.payment_splits }),
               delivery_status: orderType === "entrega" ? "PREPARO" : "",
               status: orderStatus,
               subtotal: Number(payload?.totals?.subtotal || 0),
@@ -1555,6 +1628,12 @@ function syncSubcatSelect(){
       custAddress: document.getElementById("custAddress"),
       orderNotes: document.getElementById("orderNotes"),
       paymentMethod: document.getElementById("paymentMethod"),
+      paymentSplitToggle: document.getElementById("paymentSplitToggle"),
+      paymentSplitPeople: document.getElementById("paymentSplitPeople"),
+      paymentMethodSingleWrap: document.getElementById("paymentMethodSingleWrap"),
+      paymentSplitWrap: document.getElementById("paymentSplitWrap"),
+      paymentSplitList: document.getElementById("paymentSplitList"),
+      paymentSplitHint: document.getElementById("paymentSplitHint"),
       paymentBlock: document.getElementById("paymentBlock"),
       paymentRow: document.getElementById("paymentRow"),
       checkoutTotal: document.getElementById("checkoutTotal"),
@@ -1596,6 +1675,7 @@ function syncSubcatSelect(){
     let editingProductId = null;
     let closingTableId = null;
     let closingTableIds = null;
+    let paymentSplits = [];
 
     // ===== Relógio =====
     function tickClock(){
@@ -2644,6 +2724,8 @@ function syncSubcatSelect(){
       }
       cart.clear();
       renderCart();
+      resetPaymentSplitState(0);
+      updatePaymentVisibility();
     });
 
     // ===== Produto Modal (Cadastrar/Editar) =====
@@ -3059,6 +3141,212 @@ function syncSubcatSelect(){
     });
 
     // ===== Checkout =====
+    function parsePaymentAmountInput(value){
+      const raw = String(value ?? "").trim();
+      if (!raw) return NaN;
+      const cleaned = raw.replace(/[^\d,.-]/g, "");
+      if (!cleaned) return NaN;
+      const hasComma = cleaned.includes(",");
+      const hasDot = cleaned.includes(".");
+      let normalized = cleaned;
+      if (hasComma && hasDot){
+        normalized = cleaned.replace(/\./g, "").replace(",", ".");
+      } else if (hasComma){
+        normalized = cleaned.replace(",", ".");
+      }
+      const n = Number(normalized);
+      return Number.isFinite(n) ? n : NaN;
+    }
+
+    function formatPaymentAmountInput(value){
+      return roundMoney(value).toFixed(2).replace(".", ",");
+    }
+
+    function buildPaymentMethodOptions(selected){
+      return Object.entries(PAYMENT_METHOD_LABELS)
+        .map(([value, label]) => {
+          const sel = value === selected ? " selected" : "";
+          return `<option value="${escapeAttr(value)}"${sel}>${escapeHtml(label)}</option>`;
+        })
+        .join("");
+    }
+
+    function getSplitPeopleCount(){
+      const raw = Number.parseInt(String(els.paymentSplitPeople?.value || "2"), 10);
+      if (!Number.isFinite(raw)) return 2;
+      return Math.min(20, Math.max(2, raw));
+    }
+
+    function syncSplitPeopleInput(){
+      const count = getSplitPeopleCount();
+      if (els.paymentSplitPeople) els.paymentSplitPeople.value = String(count);
+      return count;
+    }
+
+    function splitTotalEvenly(totalTarget, peopleCount){
+      const count = Math.max(2, Number(peopleCount || 2));
+      const cents = Math.max(0, Math.round(roundMoney(totalTarget) * 100));
+      const base = Math.floor(cents / count);
+      let remainder = cents - (base * count);
+      const amounts = [];
+      for (let i = 0; i < count; i++){
+        const extra = remainder > 0 ? 1 : 0;
+        if (remainder > 0) remainder -= 1;
+        amounts.push((base + extra) / 100);
+      }
+      return amounts;
+    }
+
+    function getPaymentSplitTotal(){
+      return roundMoney(paymentSplits.reduce((acc, split) => {
+        const amount = parsePaymentAmountInput(split.amount);
+        return acc + (Number.isFinite(amount) ? amount : 0);
+      }, 0));
+    }
+
+    function updatePaymentSplitHint(totalTarget){
+      if (!els.paymentSplitHint) return;
+      const target = roundMoney(totalTarget);
+      const total = getPaymentSplitTotal();
+      const mismatch = Math.abs(total - target) > 0.009;
+      const peopleCount = syncSplitPeopleInput();
+      const peopleMismatch = paymentSplits.length !== peopleCount;
+      const fewSplits = paymentSplits.length < 2;
+
+      let text = `${peopleCount} pessoas: ${brl(total)} de ${brl(target)}`;
+      if (fewSplits || peopleMismatch) text += " • ajuste a quantidade de pessoas";
+      else if (mismatch) text += " • ajuste os valores";
+
+      els.paymentSplitHint.textContent = text;
+      els.paymentSplitHint.classList.toggle("paymentSplitHintMismatch", mismatch || fewSplits || peopleMismatch);
+    }
+
+    function renderPaymentSplits(totalTarget){
+      if (!els.paymentSplitList) return;
+      if (paymentSplits.length === 0){
+        els.paymentSplitList.innerHTML = `<div class="opsEmpty">Sem parcelas geradas.</div>`;
+        updatePaymentSplitHint(totalTarget);
+        return;
+      }
+
+      els.paymentSplitList.innerHTML = paymentSplits.map((split, idx) => {
+        const method = String(split.method || "dinheiro").toLowerCase();
+        const options = buildPaymentMethodOptions(method);
+        const person = String(split.person_name || "");
+        const amount = String(split.amount || "");
+        return `
+          <div class="paymentSplitRow" data-split-id="${escapeAttr(split.id)}">
+            <input
+              class="splitPerson"
+              data-field="person_name"
+              placeholder="Pessoa ${idx + 1}"
+              value="${escapeAttr(person)}"
+            />
+            <select class="splitMethod" data-field="method">${options}</select>
+            <input
+              class="splitAmount"
+              data-field="amount"
+              inputmode="decimal"
+              placeholder="0,00"
+              value="${escapeAttr(amount)}"
+            />
+          </div>
+        `;
+      }).join("");
+
+      updatePaymentSplitHint(totalTarget);
+    }
+
+    function seedPaymentSplits(totalTarget, peopleCount = syncSplitPeopleInput()){
+      const count = Math.max(2, Number(peopleCount || 2));
+      const preferred = String(els.paymentMethod?.value || "dinheiro").toLowerCase();
+      const method = PAYMENT_METHOD_LABELS[preferred] ? preferred : "dinheiro";
+      const amounts = splitTotalEvenly(totalTarget, count);
+      paymentSplits = amounts.map((amount, idx) => ({
+        id: uid(),
+        person_name: `Pessoa ${idx + 1}`,
+        method,
+        amount: amount > 0 ? formatPaymentAmountInput(amount) : ""
+      }));
+    }
+
+    function setSplitPaymentEnabled(enabled, totalTarget){
+      if (els.paymentMethodSingleWrap){
+        els.paymentMethodSingleWrap.style.display = enabled ? "none" : "grid";
+      }
+      if (els.paymentSplitWrap){
+        els.paymentSplitWrap.style.display = enabled ? "grid" : "none";
+      }
+      if (enabled){
+        if (paymentSplits.length === 0) seedPaymentSplits(totalTarget);
+        renderPaymentSplits(totalTarget);
+      }
+    }
+
+    function resetPaymentSplitState(totalTarget = 0){
+      paymentSplits = [];
+      if (els.paymentSplitToggle) els.paymentSplitToggle.checked = false;
+      if (els.paymentSplitPeople) els.paymentSplitPeople.value = "2";
+      setSplitPaymentEnabled(false, totalTarget);
+      if (els.paymentSplitHint){
+        const target = roundMoney(totalTarget);
+        els.paymentSplitHint.textContent = `2 pessoas: ${brl(0)} de ${brl(target)}`;
+        els.paymentSplitHint.classList.remove("paymentSplitHintMismatch");
+      }
+    }
+
+    function getCheckoutPaymentMeta(){
+      if (els.paymentSplitToggle?.checked) return "Dividido";
+      const v = String(els.paymentMethod?.value || "");
+      return paymentMethodLabel(v);
+    }
+
+    function normalizePaymentSplits(totalTarget){
+      const target = roundMoney(totalTarget);
+      if (paymentSplits.length < 2){
+        throw new Error("Adicione ao menos 2 parcelas para usar pagamento dividido");
+      }
+
+      const normalized = paymentSplits.map((split, idx) => {
+        const person = String(split.person_name || "").trim() || `Pessoa ${idx + 1}`;
+        const method = String(split.method || "").trim().toLowerCase();
+        if (!PAYMENT_METHOD_LABELS[method]){
+          throw new Error(`Informe a forma de pagamento de ${person}`);
+        }
+        const amount = parsePaymentAmountInput(split.amount);
+        if (!Number.isFinite(amount) || amount <= 0){
+          throw new Error(`Informe um valor válido para ${person}`);
+        }
+        return { person_name: person, method, amount: roundMoney(amount) };
+      });
+
+      const sum = roundMoney(normalized.reduce((acc, split) => acc + split.amount, 0));
+      if (Math.abs(sum - target) > 0.009){
+        throw new Error(`A soma das parcelas (${brl(sum)}) precisa ser igual ao total (${brl(target)})`);
+      }
+      return normalized;
+    }
+
+    function resolveCheckoutPayment(payNow, totalTarget){
+      if (!payNow) return { payment_method: "", payment_splits: [] };
+
+      const splitEnabled = !!els.paymentSplitToggle?.checked;
+      if (!splitEnabled){
+        const payment = String(els.paymentMethod?.value || "").trim();
+        if (!payment) throw new Error("Informe o pagamento");
+        return { payment_method: payment, payment_splits: [] };
+      }
+
+      const splits = normalizePaymentSplits(totalTarget);
+      const methods = Array.from(new Set(splits.map((split) => split.method)))
+        .map((method) => paymentMethodLabel(method))
+        .join(" + ");
+      return {
+        payment_method: `dividido (${methods || "misto"})`,
+        payment_splits: splits
+      };
+    }
+
     function calcTotals(){
       let subtotal = 0;
       for (const it of cart.values()) subtotal += it.unit_price * it.qty;
@@ -3071,7 +3359,7 @@ function syncSubcatSelect(){
     function unlockCheckoutFields(){
       const fields = [
         els.orderType, els.tableNo, els.custName, els.custPhone,
-        els.custAddress, els.orderNotes, els.paymentMethod
+        els.custAddress, els.orderNotes, els.paymentMethod, els.paymentSplitToggle, els.paymentSplitPeople
       ];
       for (const f of fields){
         if (!f) continue;
@@ -3098,6 +3386,7 @@ function syncSubcatSelect(){
     function resetCheckoutState(){
       closingTableId = null;
       closingTableIds = null;
+      resetPaymentSplitState(calcTotals().total);
       unlockCheckoutFields();
       forceEnableCheckoutModal();
       updatePaymentVisibility();
@@ -3512,17 +3801,24 @@ function syncSubcatSelect(){
     function updatePaymentVisibility(){
       const isMesa = els.orderType.value === "mesa";
       const needsPay = (!isMesa) || (closingTableId !== null);
+      const totalTarget = calcTotals().total;
+      const compactCheckout = window.matchMedia("(max-width: 560px)").matches;
 
       if (els.paymentBlock && els.paymentRow){
         els.paymentBlock.style.display = needsPay ? "grid" : "none";
-        els.paymentRow.style.gridTemplateColumns = needsPay ? "1fr 1fr" : "1fr";
+        els.paymentRow.style.gridTemplateColumns = needsPay
+          ? (compactCheckout ? "1fr" : "minmax(0,1fr) 170px")
+          : "1fr";
       }
 
       if (!needsPay){
+        if (els.paymentSplitToggle) els.paymentSplitToggle.checked = false;
+        setSplitPaymentEnabled(false, totalTarget);
         els.metaPay.textContent = "A pagar";
       } else {
-        const v = els.paymentMethod.value;
-        els.metaPay.textContent = v === "pix" ? "PIX" : v.charAt(0).toUpperCase() + v.slice(1);
+        const splitEnabled = !!els.paymentSplitToggle?.checked;
+        setSplitPaymentEnabled(splitEnabled, totalTarget);
+        els.metaPay.textContent = getCheckoutPaymentMeta();
       }
     }
 
@@ -3532,45 +3828,89 @@ function syncSubcatSelect(){
       updatePaymentVisibility();
     });
     els.paymentMethod.addEventListener("change", () => {
-      const v = els.paymentMethod.value;
-      els.metaPay.textContent = v === "pix" ? "PIX" : v.charAt(0).toUpperCase() + v.slice(1);
+      if (els.paymentSplitToggle?.checked) return;
+      els.metaPay.textContent = getCheckoutPaymentMeta();
     });
+    if (els.paymentSplitToggle) els.paymentSplitToggle.addEventListener("change", () => {
+      if (els.paymentSplitToggle.checked){
+        const totalTarget = calcTotals().total;
+        seedPaymentSplits(totalTarget, syncSplitPeopleInput());
+      }
+      updatePaymentVisibility();
+    });
+    if (els.paymentSplitPeople) els.paymentSplitPeople.addEventListener("change", () => {
+      const count = syncSplitPeopleInput();
+      if (!els.paymentSplitToggle?.checked) return;
+      seedPaymentSplits(calcTotals().total, count);
+      renderPaymentSplits(calcTotals().total);
+      els.metaPay.textContent = getCheckoutPaymentMeta();
+    });
+    if (els.paymentSplitPeople) els.paymentSplitPeople.addEventListener("input", () => {
+      syncSplitPeopleInput();
+    });
+    if (els.paymentSplitList) els.paymentSplitList.addEventListener("input", (e) => {
+      const input = e.target.closest("[data-field]");
+      if (!input) return;
+      const row = input.closest(".paymentSplitRow");
+      if (!row) return;
+      const id = String(row.dataset.splitId || "");
+      const split = paymentSplits.find((item) => item.id === id);
+      if (!split) return;
+      const field = String(input.dataset.field || "");
+      if (field === "person_name") split.person_name = input.value;
+      if (field === "amount") split.amount = input.value;
+      if (field === "method") split.method = input.value;
+      updatePaymentSplitHint(calcTotals().total);
+    });
+    if (els.paymentSplitList) els.paymentSplitList.addEventListener("change", (e) => {
+      const select = e.target.closest("select[data-field='method']");
+      if (!select) return;
+      const row = select.closest(".paymentSplitRow");
+      if (!row) return;
+      const id = String(row.dataset.splitId || "");
+      const split = paymentSplits.find((item) => item.id === id);
+      if (!split) return;
+      split.method = select.value;
+      updatePaymentSplitHint(calcTotals().total);
+    });
+    window.addEventListener("resize", updatePaymentVisibility);
 
     // Salvar e imprimir
     els.checkoutConfirm.addEventListener("click", async () => {
       if (cart.size === 0){ toast("Carrinho vazio 😅", "info"); return; }
       if (!validateCheckout()) return;
 
-      const totals = calcTotals();
-      const isMesa = els.orderType.value === "mesa";
-      const payNow = (!isMesa) || (closingTableId !== null);
-      const payment = payNow ? els.paymentMethod.value : "";
-
-      const payload = {
-        order_type: els.orderType.value,
-        table_no: els.tableNo.value.trim(),
-        customer_name: els.custName.value.trim(),
-        customer_phone: els.custPhone.value.trim(),
-        address: els.custAddress.value.trim(),
-        notes: els.orderNotes.value.trim(),
-
-        payment_method: payment,
-        totals,
-
-        items: Array.from(cart.values()).map(it => ({
-          name: it.name,
-          qty: it.qty,
-          unit_price: it.unit_price,
-          notes: it.notes || "",
-          is_kitchen: !!it.is_kitchen
-        }))
-      };
-
       try{
+        const totals = calcTotals();
+        const isMesa = els.orderType.value === "mesa";
+        const payNow = (!isMesa) || (closingTableId !== null);
+        const paymentData = resolveCheckoutPayment(payNow, totals.total);
+
+        const payload = {
+          order_type: els.orderType.value,
+          table_no: els.tableNo.value.trim(),
+          customer_name: els.custName.value.trim(),
+          customer_phone: els.custPhone.value.trim(),
+          address: els.custAddress.value.trim(),
+          notes: els.orderNotes.value.trim(),
+
+          payment_method: paymentData.payment_method,
+          payment_splits: paymentData.payment_splits,
+          totals,
+
+          items: Array.from(cart.values()).map(it => ({
+            name: it.name,
+            qty: it.qty,
+            unit_price: it.unit_price,
+            notes: it.notes || "",
+            is_kitchen: !!it.is_kitchen
+          }))
+        };
+
         setButtonLoading(els.checkoutConfirm, true, "Salvando...");
 
         if (closingTableId){
-          if (!payment) throw new Error("Informe o pagamento para fechar a mesa");
+          if (!paymentData.payment_method) throw new Error("Informe o pagamento para fechar a mesa");
 
           const ids = (Array.isArray(closingTableIds) && closingTableIds.length)
             ? closingTableIds
@@ -3588,7 +3928,8 @@ function syncSubcatSelect(){
                 customer_phone: payload.customer_phone,
                 address: payload.address,
                 notes: payload.notes,
-                payment_method: payment
+                payment_method: paymentData.payment_method,
+                payment_splits: paymentData.payment_splits
               })
             });
 
@@ -3607,6 +3948,7 @@ function syncSubcatSelect(){
           updatePaymentVisibility();
           cart.clear();
           renderCart();
+          resetPaymentSplitState(0);
         } else {
           const resp = await fetch("/api/orders", {
             method:"POST",
@@ -3624,6 +3966,7 @@ function syncSubcatSelect(){
 
           cart.clear();
           renderCart();
+          resetPaymentSplitState(0);
         }
 
       } catch (e){
@@ -3813,6 +4156,8 @@ function syncSubcatSelect(){
     syncTabs();
     renderProducts();
     renderCart();
+    if (els.metaType) els.metaType.textContent = prettyType(els.orderType?.value || "entrega");
+    updatePaymentVisibility();
     renderRole();
     updateBackupHint();
     scheduleAutoBackup();

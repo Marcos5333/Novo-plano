@@ -316,12 +316,30 @@
         <div class="formGrid" id="paymentRow">
           <div class="field" id="paymentBlock">
             <label>Pagamento</label>
-            <select id="paymentMethod">
-              <option value="dinheiro" selected>Dinheiro</option>
-              <option value="pix">PIX</option>
-              <option value="debito">Débito</option>
-              <option value="credito">Crédito</option>
-            </select>
+            <div class="switchRow paymentSplitSwitch">
+              <div class="paymentSplitToggleLine">
+                <input type="checkbox" id="paymentSplitToggle" />
+                <span>Dividir pagamento (pessoas/formas)</span>
+              </div>
+              <div class="paymentSplitPeopleInline">
+                <label for="paymentSplitPeople">Pessoas</label>
+                <input id="paymentSplitPeople" type="number" min="2" max="20" step="1" value="2" inputmode="numeric" />
+              </div>
+            </div>
+
+            <div id="paymentMethodSingleWrap">
+              <select id="paymentMethod">
+                <option value="dinheiro" selected>Dinheiro</option>
+                <option value="pix">PIX</option>
+                <option value="debito">Débito</option>
+                <option value="credito">Crédito</option>
+              </select>
+            </div>
+
+            <div id="paymentSplitWrap" class="paymentSplitWrap" style="display:none">
+              <div id="paymentSplitList" class="paymentSplitList"></div>
+              <div class="hint" id="paymentSplitHint">Dividido: R$ 0,00 de R$ 0,00</div>
+            </div>
           </div>
           <div class="field">
             <label>Total</label>

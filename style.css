@@ -792,7 +792,7 @@
       font-weight:800;
       color:#1f2a44;
     }
-    .switchRow input{
+    .switchRow input[type="checkbox"]{
       width:18px;
       height:18px;
     }
@@ -1008,6 +1008,103 @@
       font-size:12px;
       color: var(--muted);
       font-weight:900;
+    }
+    .paymentSplitSwitch{
+      margin-top:2px;
+      justify-content:space-between;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .paymentSplitToggleLine{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:220px;
+    }
+    .paymentSplitPeopleInline{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin-left:auto;
+    }
+    .paymentSplitPeopleInline label{
+      margin:0;
+      white-space:nowrap;
+    }
+    .paymentSplitPeopleInline input{
+      width:78px;
+      padding:8px 10px;
+      border-radius:10px;
+      font-weight:900;
+    }
+    #paymentMethodSingleWrap{
+      display:grid;
+    }
+    .paymentSplitWrap{
+      display:grid;
+      gap:8px;
+    }
+    .paymentSplitList{
+      display:grid;
+      gap:8px;
+    }
+    .paymentSplitRow{
+      display:grid;
+      grid-template-columns: minmax(140px,1.5fr) minmax(120px,1fr) minmax(110px,.9fr);
+      gap:8px;
+      align-items:end;
+    }
+    .paymentSplitRow > *{
+      min-width:0;
+    }
+    #paymentRow{
+      grid-template-columns:minmax(0,1fr) 170px;
+      align-items:start;
+    }
+    #paymentRow #paymentBlock{
+      min-width:0;
+    }
+    .paymentSplitHintMismatch{
+      color:#b91c1c;
+    }
+    @media (max-width: 900px){
+      .paymentSplitRow{
+        grid-template-columns: 1fr 1fr;
+      }
+      .paymentSplitRow .splitPerson{
+        grid-column:1 / -1;
+      }
+      .paymentSplitRow .splitMethod{
+        grid-column:1 / 2;
+      }
+      .paymentSplitRow .splitAmount{
+        grid-column:2 / 3;
+      }
+      .paymentSplitPeopleInline{
+        width:100%;
+        justify-content:flex-start;
+        margin-left:0;
+      }
+      .paymentSplitPeopleInline input{
+        width:88px;
+      }
+    }
+    @media (max-width: 620px){
+      .paymentSplitRow{
+        grid-column:1 / -1;
+        grid-template-columns:1fr;
+      }
+      .paymentSplitRow .splitMethod{
+        grid-column:1 / -1;
+      }
+      .paymentSplitRow .splitAmount{
+        grid-column:1 / -1;
+      }
+    }
+    @media (max-width: 560px){
+      #paymentRow{
+        grid-template-columns:1fr;
+      }
     }
 
     /* ===== Mesas/Cozinha ===== */
