@@ -48,6 +48,101 @@
       }
     }
 
+    function lockSignaturePosition(){
+      const img = document.getElementById("signatureMark");
+      if (!img) return;
+      const apply = () => {
+        img.style.position = "fixed";
+        img.style.right = "10px";
+        img.style.bottom = "8px";
+        img.style.left = "auto";
+        img.style.top = "auto";
+        img.style.transform = "none";
+      };
+      apply();
+      window.addEventListener("scroll", apply, { passive: true });
+      window.addEventListener("resize", apply, { passive: true });
+      document.addEventListener("scroll", apply, { passive: true });
+    }
+
+    function removeSignatureBackground(){
+      const img = document.getElementById("signatureMark");
+      if (!img) return;
+
+      const hide = () => { img.style.display = "none"; };
+      img.addEventListener("error", hide, { once: true });
+
+      const process = () => {
+        if (img.dataset.cleaned === "1") return;
+        if (!img.naturalWidth || !img.naturalHeight) return;
+        try{
+          const canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext("2d", { willReadFrequently: true });
+          if (!ctx) return;
+
+          ctx.drawImage(img, 0, 0);
+          const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = frame.data;
+
+          const patchW = Math.max(6, Math.floor(canvas.width * 0.08));
+          const patchH = Math.max(6, Math.floor(canvas.height * 0.08));
+          const points = [
+            [0, 0],
+            [canvas.width - patchW, 0],
+            [0, canvas.height - patchH],
+            [canvas.width - patchW, canvas.height - patchH],
+          ];
+          let sr = 0, sg = 0, sb = 0, count = 0;
+          for (const [x0, y0] of points){
+            for (let y = y0; y < y0 + patchH; y++){
+              for (let x = x0; x < x0 + patchW; x++){
+                const i = (y * canvas.width + x) * 4;
+                sr += data[i];
+                sg += data[i + 1];
+                sb += data[i + 2];
+                count += 1;
+              }
+            }
+          }
+          if (!count) return;
+          const br = sr / count;
+          const bg = sg / count;
+          const bb = sb / count;
+
+          const removeThreshold = 62;
+          const fadeThreshold = 105;
+
+          for (let i = 0; i < data.length; i += 4){
+            const a = data[i + 3];
+            if (a < 6) continue;
+            const dist = Math.abs(data[i] - br) + Math.abs(data[i + 1] - bg) + Math.abs(data[i + 2] - bb);
+            if (dist <= removeThreshold){
+              data[i + 3] = 0;
+              continue;
+            }
+            if (dist < fadeThreshold){
+              const ratio = (dist - removeThreshold) / (fadeThreshold - removeThreshold);
+              data[i + 3] = Math.round(a * Math.max(0, Math.min(1, ratio)));
+            }
+          }
+
+          ctx.putImageData(frame, 0, 0);
+          img.dataset.cleaned = "1";
+          img.src = canvas.toDataURL("image/png");
+        } catch {
+          // mantém imagem original se não conseguir processar
+        }
+      };
+
+      if (img.complete && img.naturalWidth > 0){
+        process();
+      } else {
+        img.addEventListener("load", process, { once: true });
+      }
+    }
+
     function uid(){
       return (crypto?.randomUUID?.() ?? ('id-' + Math.random().toString(16).slice(2)));
     }
@@ -75,18 +170,6 @@
     }
 
     // ===== Demo Storage Mode (Web/Vercel sem SQLite) =====
-    function shouldUseDemoStorageMode(){
-      const params = new URLSearchParams(window.location.search);
-      const force = String(params.get("demo") || "").toLowerCase();
-      if (force === "1" || force === "true" || force === "on") return true;
-      if (force === "0" || force === "false" || force === "off") return false;
-
-      const host = String(window.location.hostname || "").toLowerCase();
-      const isLocalHost = host === "localhost" || host === "127.0.0.1" || host === "";
-      const isElectron = /electron/i.test(String(navigator.userAgent || ""));
-      return !isLocalHost && !isElectron;
-    }
-
     const DEMO_STORAGE_MODE = true;
     const DEMO_DB_KEY = "mvs_demo_backend_v1";
     const AUTO_BACKUP_PREFIX = "mvs_auto_backup_";
@@ -259,6 +342,17 @@
             payment_splits: demoNormalizePaymentSplits(o),
             created_at: o.created_at || demoNowIso(),
             total: demoOrderTotal(db, o.id),
+            order_type: String(o.order_type || ""),
+            table_no: String(o.table_no || ""),
+            customer_name: String(o.customer_name || ""),
+            items: db.order_items
+              .filter((it) => Number(it.order_id) === Number(o.id))
+              .map((it) => ({
+                name: String(it.name || "Item"),
+                qty: Number(it.qty || 0),
+                unit_price: Number(it.unit_price || 0),
+                notes: String(it.notes || ""),
+              })),
           }))
           .sort((a, b) => a.id - b.id);
 
@@ -306,6 +400,7 @@
 
         if (["day", "daily", "diario"].includes(p)) {
           return {
+            key: "day",
             title: "Relatorio Diario (Demo Storage)",
             start: new Date(y, m, d, 0, 0, 0, 0),
             end: new Date(y, m, d, 23, 59, 59, 999),
@@ -313,6 +408,7 @@
         }
         if (["month", "monthly", "mensal"].includes(p)) {
           return {
+            key: "month",
             title: "Relatorio Mensal (Demo Storage)",
             start: new Date(y, m, 1, 0, 0, 0, 0),
             end: new Date(y, m + 1, 0, 23, 59, 59, 999),
@@ -320,6 +416,7 @@
         }
         if (["year", "yearly", "annual", "anual"].includes(p)) {
           return {
+            key: "year",
             title: "Relatorio Anual (Demo Storage)",
             start: new Date(y, 0, 1, 0, 0, 0, 0),
             end: new Date(y, 11, 31, 23, 59, 59, 999),
@@ -379,11 +476,17 @@ ${bodyHtml}
           return `<div class="muted">• ${escapeHtml(person)} • ${escapeHtml(paymentMethodLabel(split.method).toUpperCase())}: ${escapeHtml(brl(split.amount || 0))}</div>`;
         }).join("");
         const rows = items.map((it) => {
+          const qty = Number(it.qty || 0);
+          const unit = Number(it.unit_price || 0);
           const line = Number(it.qty || 0) * Number(it.unit_price || 0);
           const notes = String(it.notes || "").trim();
           return `
             <tr>
-              <td>${escapeHtml(`${it.qty}x ${it.name}`)}${notes ? ` <span class="muted">(${escapeHtml(notes)})</span>` : ""}</td>
+              <td>
+                <div>${escapeHtml(`${qty}x ${it.name}`)}</div>
+                <div class="muted">Unitário: ${escapeHtml(brl(unit))}</div>
+                ${notes ? `<div class="muted">Obs: ${escapeHtml(notes)}</div>` : ""}
+              </td>
               <td>${escapeHtml(brl(line))}</td>
             </tr>
           `;
@@ -412,28 +515,96 @@ ${bodyHtml}
         );
       }
 
-      function demoBuildReportHtml(title, startIso, endIso, report){
+      function demoNormalizeReportMode(mode){
+        const raw = String(mode || "").trim().toLowerCase();
+        if (raw === "detailed" || raw === "detalhado" || raw === "detail") return "detailed";
+        return "normal";
+      }
+
+      function demoBuildReportHtml(title, startIso, endIso, report, rangeKey = "", mode = "normal"){
+        const reportMode = demoNormalizeReportMode(mode);
         const dtStart = new Date(startIso).toLocaleString("pt-BR");
         const dtEnd = new Date(endIso).toLocaleString("pt-BR");
+        const rangeDayLabel = new Date(startIso).toLocaleDateString("pt-BR");
+        const rangeMonthLabel = new Date(startIso).toLocaleDateString("pt-BR", { month: "2-digit", year: "numeric" });
+        const rangeYearLabel = String(new Date(startIso).getFullYear());
+        const rangeHint = (
+          rangeKey === "day"
+            ? `Somente vendas fechadas do dia ${rangeDayLabel}.`
+            : (rangeKey === "month"
+              ? `Somente vendas fechadas do mes ${rangeMonthLabel}.`
+              : (rangeKey === "year"
+                ? `Somente vendas fechadas do ano ${rangeYearLabel}.`
+                : ""))
+        );
         const rows = report.rows.map((r) => {
-          const payLabel = (Array.isArray(r.payment_splits) && r.payment_splits.length)
-            ? "DIVIDIDO"
-            : String(r.payment_method || "-").toUpperCase();
+          const customer = String(r.customer_name || "").trim() || "-";
           return `
           <tr>
             <td>#${escapeHtml(String(r.order_number || "-"))}</td>
-            <td>${escapeHtml(payLabel)}</td>
+            <td>${escapeHtml(customer)}</td>
             <td>${escapeHtml(new Date(r.created_at).toLocaleString("pt-BR"))}</td>
             <td>${escapeHtml(brl(r.total || 0))}</td>
           </tr>
         `;
         }).join("");
 
+        const detailedRows = report.rows.map((r) => {
+          const payLabel = (Array.isArray(r.payment_splits) && r.payment_splits.length)
+            ? "DIVIDIDO"
+            : String(r.payment_method || "-").toUpperCase();
+          const typeLabel = String(r.order_type || "-").toUpperCase();
+          const customer = String(r.customer_name || "").trim() || "-";
+          const tableNo = String(r.table_no || "").trim();
+          const typeWithTable = (typeLabel === "MESA" && tableNo) ? `MESA ${tableNo}` : typeLabel;
+          const items = Array.isArray(r.items) ? r.items : [];
+          const itemsHtml = items.length
+            ? items.map((it) => {
+                const qty = Number(it.qty || 0);
+                const unit = Number(it.unit_price || 0);
+                const line = roundMoney(qty * unit);
+                const notes = String(it.notes || "").trim();
+                return `
+                  <div>• ${escapeHtml(`${qty}x ${it.name}`)} - ${escapeHtml(brl(line))}</div>
+                  <div class="muted">  Unitario: ${escapeHtml(brl(unit))}</div>
+                  ${notes ? `<div class="muted">  Obs: ${escapeHtml(notes)}</div>` : ""}
+                `;
+              }).join("")
+            : `<div class="muted">Sem itens no pedido.</div>`;
+          return `
+            <div class="box">
+              <div><b>Pedido #${escapeHtml(String(r.order_number || "-"))}</b> - ${escapeHtml(new Date(r.created_at).toLocaleString("pt-BR"))}</div>
+              <div>Cliente: ${escapeHtml(customer)}</div>
+              <div>Origem: ${escapeHtml(typeWithTable)} - Pagamento: ${escapeHtml(payLabel)} - Total: ${escapeHtml(brl(r.total || 0))}</div>
+              <div class="hr"></div>
+              ${itemsHtml}
+            </div>
+          `;
+        }).join("");
+
+        const normalSection = `
+          <div class="box">
+            <table>
+              <thead>
+                <tr><th>Pedido</th><th>Cliente</th><th>Data/Hora</th><th>Total</th></tr>
+              </thead>
+              <tbody>${rows || `<tr><td colspan="4">Sem vendas no periodo</td></tr>`}</tbody>
+            </table>
+          </div>
+        `;
+
+        const detailedSection = `
+          <div class="hr"></div>
+          <h1>Detalhado (Cliente • Produto • Horario)</h1>
+          ${detailedRows || `<div class="box">Sem vendas no periodo.</div>`}
+        `;
+
         return demoHtmlPage(
           title,
           `
-            <h1>${escapeHtml(title)}</h1>
+            <h1>${escapeHtml(title)}${reportMode === "detailed" ? " - Detalhado" : " - Normal"}</h1>
             <p class="muted">Periodo: <b>${escapeHtml(dtStart)}</b> ate <b>${escapeHtml(dtEnd)}</b></p>
+            ${rangeHint ? `<p class="muted"><b>${escapeHtml(rangeHint)}</b></p>` : ""}
             <div class="box">
               <div><b>Pedidos:</b> ${report.rows.length}</div>
               <div><b>Total:</b> ${escapeHtml(brl(report.totalGeral || 0))}</div>
@@ -442,14 +613,7 @@ ${bodyHtml}
               <div>Debito: ${escapeHtml(brl(report.byPay?.debito || 0))}</div>
               <div>Credito: ${escapeHtml(brl(report.byPay?.credito || 0))}</div>
             </div>
-            <div class="box">
-              <table>
-                <thead>
-                  <tr><th>Pedido</th><th>Pagamento</th><th>Data/Hora</th><th>Total</th></tr>
-                </thead>
-                <tbody>${rows || `<tr><td colspan="4">Sem vendas no periodo</td></tr>`}</tbody>
-              </table>
-            </div>
+            ${reportMode === "detailed" ? detailedSection : normalSection}
           `
         );
       }
@@ -478,7 +642,8 @@ ${bodyHtml}
           const start = db.meta.cash_last_opened_at || db.meta.cash_opened_at || new Date(0).toISOString();
           const end = db.meta.cash_last_closed_at || demoNowIso();
           const report = demoSumOrdersBetween(db, start, end);
-          return demoOpenHtml(demoBuildReportHtml("Relatorio de Caixa (Demo Storage)", start, end, report), target, features);
+          const mode = demoNormalizeReportMode(urlObj.searchParams.get("mode"));
+          return demoOpenHtml(demoBuildReportHtml("Relatorio de Caixa (Demo Storage)", start, end, report, "cash", mode), target, features);
         }
 
         if (path === "/api/reports/print"){
@@ -489,7 +654,8 @@ ${bodyHtml}
           const start = range.start.toISOString();
           const end = range.end.toISOString();
           const report = demoSumOrdersBetween(db, start, end);
-          return demoOpenHtml(demoBuildReportHtml(range.title, start, end, report), target, features);
+          const mode = demoNormalizeReportMode(urlObj.searchParams.get("mode"));
+          return demoOpenHtml(demoBuildReportHtml(range.title, start, end, report, range.key || "", mode), target, features);
         }
 
         return null;
@@ -521,7 +687,8 @@ ${bodyHtml}
           const start = db.meta.cash_last_opened_at || db.meta.cash_opened_at || new Date(0).toISOString();
           const end = db.meta.cash_last_closed_at || demoNowIso();
           const report = demoSumOrdersBetween(db, start, end);
-          return new Response(demoBuildReportHtml("Relatorio de Caixa (Demo Storage)", start, end, report), {
+          const mode = demoNormalizeReportMode(urlObj.searchParams.get("mode"));
+          return new Response(demoBuildReportHtml("Relatorio de Caixa (Demo Storage)", start, end, report, "cash", mode), {
             status: 200,
             headers: { "Content-Type": "text/html; charset=utf-8" }
           });
@@ -538,7 +705,8 @@ ${bodyHtml}
           const start = range.start.toISOString();
           const end = range.end.toISOString();
           const report = demoSumOrdersBetween(db, start, end);
-          return new Response(demoBuildReportHtml(range.title, start, end, report), {
+          const mode = demoNormalizeReportMode(urlObj.searchParams.get("mode"));
+          return new Response(demoBuildReportHtml(range.title, start, end, report, range.key || "", mode), {
             status: 200,
             headers: { "Content-Type": "text/html; charset=utf-8" }
           });
@@ -1413,6 +1581,7 @@ function syncSubcatSelect(){
       saveCategories(categories);
       renderCategoryTabs();
       renderCategorySelect();
+      refreshAddonManager();
       syncTabs();
       renderProducts();
       toast("Categorias atualizadas.", "success");
@@ -1423,9 +1592,9 @@ function syncSubcatSelect(){
     const LS_KEY = "mvs_products_v3";
     function seedProducts(){
       return [
-        { id: uid(), name:"Calabresa", category:"pizzas", emoji:"🍕", desc:"Tradicional", priceP:39.90, priceM:49.90, priceG:59.90, isKitchen:true },
-        { id: uid(), name:"Frango c/ Catupiry", category:"pizzas", emoji:"🍕", desc:"Cremosa", priceP:42.90, priceM:54.90, priceG:64.90, isKitchen:true },
-        { id: uid(), name:"4 Queijos", category:"pizzas", emoji:"🧀", desc:"Bem queijo", priceP:45.90, priceM:58.90, priceG:68.90, isKitchen:true },
+        { id: uid(), name:"Calabresa", category:"pizzas", emoji:"🍕", desc:"Tradicional", priceP:39.90, priceM:49.90, isKitchen:true },
+        { id: uid(), name:"Frango c/ Catupiry", category:"pizzas", emoji:"🍕", desc:"Cremosa", priceP:42.90, priceM:54.90, isKitchen:true },
+        { id: uid(), name:"4 Queijos", category:"pizzas", emoji:"🧀", desc:"Bem queijo", priceP:45.90, priceM:58.90, isKitchen:true },
 
         { id: uid(), name:"Refrigerante 2L", category:"bebidas", emoji:"🥤", desc:"Gelado", price:12.00, isKitchen:false },
         { id: uid(), name:"Suco 500ml", category:"bebidas", emoji:"🧃", desc:"Natural", price:8.00, isKitchen:false },
@@ -1488,12 +1657,235 @@ function syncSubcatSelect(){
     // cart: Map<key, { name, qty, unit_price, notes, is_kitchen, emoji }>
     const cart = new Map();
 
+    const LS_ADDONS = "mvs_category_addons_v1";
+    const DEFAULT_CATEGORY_ADDONS = Object.freeze({
+      pizzas: [
+        { name: "Sem adicional", price: 0 },
+        { name: "Azeitona extra", price: 2.0 },
+        { name: "Borda recheada", price: 8.0 },
+        { name: "Orégano extra", price: 1.0 },
+      ],
+      lanches: [
+        { name: "Sem adicional", price: 0 },
+        { name: "Batata frita", price: 6.0 },
+        { name: "Molho da casa", price: 2.0 },
+        { name: "Maionese temperada", price: 2.0 },
+        { name: "Queijo extra", price: 4.0 },
+        { name: "Bacon extra", price: 5.0 },
+      ],
+      acai: [
+        { name: "Sem adicional", price: 0 },
+        { name: "Leite condensado", price: 2.0 },
+        { name: "Granola", price: 2.0 },
+        { name: "Banana", price: 2.0 },
+        { name: "Morango", price: 3.0 },
+        { name: "Paçoca", price: 2.0 },
+      ],
+      bebidas: [
+        { name: "Sem adicional", price: 0 },
+        { name: "Com gelo", price: 0 },
+        { name: "Sem gelo", price: 0 },
+        { name: "Limão", price: 1.0 },
+      ],
+      extras: [
+        { name: "Sem adicional", price: 0 },
+        { name: "Molho da casa", price: 2.0 },
+        { name: "Queijo ralado", price: 2.0 },
+      ],
+      sobremesas: [
+        { name: "Sem adicional", price: 0 },
+        { name: "Calda de chocolate", price: 2.0 },
+        { name: "Calda de morango", price: 2.0 },
+        { name: "Chantilly", price: 3.0 },
+      ],
+      _default: [{ name: "Sem adicional", price: 0 }],
+    });
+
+    function normalizeAddonName(raw){
+      return String(raw || "").trim().replace(/\s+/g, " ");
+    }
+
+    function defaultAddonPriceForCategory(categoryKey, addonName){
+      const key = String(categoryKey || "_default").trim().toLowerCase();
+      const name = normalizeAddonName(addonName).toLowerCase();
+      if (!name) return 0;
+      const variants = new Set([key]);
+      if (key.endsWith("s")) variants.add(key.slice(0, -1));
+      if (key && !key.endsWith("s")) variants.add(`${key}s`);
+      if (key === "pizza") variants.add("pizzas");
+      if (key === "lanche") variants.add("lanches");
+      if (key === "bebida") variants.add("bebidas");
+      if (key === "sobremesa") variants.add("sobremesas");
+      if (key === "extra") variants.add("extras");
+      if (key === "açai") variants.add("acai");
+      if (key === "acai") variants.add("açai");
+
+      for (const candidate of variants){
+        const source = Array.isArray(DEFAULT_CATEGORY_ADDONS[candidate]) ? DEFAULT_CATEGORY_ADDONS[candidate] : null;
+        if (!source) continue;
+        const found = source.find((entry) => normalizeAddonName(entry?.name || "").toLowerCase() === name);
+        if (found){
+          const value = Number(found?.price || 0);
+          return roundMoney(Math.max(0, Number.isFinite(value) ? value : 0));
+        }
+      }
+      return 0;
+    }
+
+    function parseMoneyFlexible(raw){
+      const str = String(raw ?? "").trim();
+      if (!str) return NaN;
+      const cleaned = str.replace(/[^\d,.-]/g, "");
+      if (!cleaned) return NaN;
+      const hasComma = cleaned.includes(",");
+      const hasDot = cleaned.includes(".");
+      let normalized = cleaned;
+      if (hasComma && hasDot){
+        normalized = cleaned.replace(/\./g, "").replace(",", ".");
+      } else if (hasComma){
+        normalized = cleaned.replace(",", ".");
+      }
+      const n = Number(normalized);
+      return Number.isFinite(n) ? n : NaN;
+    }
+
+    function normalizeAddonEntry(raw, categoryKey = "_default"){
+      if (typeof raw === "string"){
+        const name = normalizeAddonName(raw);
+        if (!name) return null;
+        return { name, price: defaultAddonPriceForCategory(categoryKey, name) };
+      }
+      if (raw && typeof raw === "object"){
+        const name = normalizeAddonName(raw.name || raw.label || "");
+        if (!name) return null;
+        const fallbackPrice = defaultAddonPriceForCategory(categoryKey, name);
+        const rawPriceValue = raw.price;
+        const hasRawPrice = rawPriceValue !== undefined && rawPriceValue !== null && String(rawPriceValue).trim() !== "";
+        const parsed = hasRawPrice
+          ? ((typeof rawPriceValue === "string") ? parseMoneyFlexible(rawPriceValue) : Number(rawPriceValue))
+          : fallbackPrice;
+        const safe = Number.isFinite(parsed) ? parsed : fallbackPrice;
+        const price = roundMoney(Math.max(0, safe));
+        return { name, price: Number.isFinite(price) ? price : 0 };
+      }
+      return null;
+    }
+
+    function normalizeAddonList(rawList, categoryKey = "_default"){
+      const list = Array.isArray(rawList) ? rawList : [];
+      const out = [];
+      const seen = new Set();
+      for (const row of list){
+        const entry = normalizeAddonEntry(row, categoryKey);
+        if (!entry) continue;
+        const key = entry.name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(entry);
+      }
+      const filtered = out.filter((entry) => entry.name.toLowerCase() !== "sem adicional");
+      return [{ name: "Sem adicional", price: 0 }, ...filtered];
+    }
+
+    function normalizeAddonsMap(rawMap){
+      const source = (rawMap && typeof rawMap === "object") ? rawMap : {};
+      const keys = new Set(["_default", ...Object.keys(DEFAULT_CATEGORY_ADDONS), ...Object.keys(source)]);
+      const out = {};
+      for (const keyRaw of keys){
+        const key = String(keyRaw || "").trim().toLowerCase();
+        if (!key) continue;
+        const fromSource = Array.isArray(source[key]) ? source[key] : source[keyRaw];
+        const base = Array.isArray(fromSource)
+          ? fromSource
+          : (DEFAULT_CATEGORY_ADDONS[key] || DEFAULT_CATEGORY_ADDONS._default);
+        out[key] = normalizeAddonList(base, key);
+      }
+      if (!Array.isArray(out._default) || !out._default.length){
+        out._default = [{ name: "Sem adicional", price: 0 }];
+      }
+      return out;
+    }
+
+    function loadCategoryAddons(){
+      try{
+        const raw = localStorage.getItem(LS_ADDONS);
+        const parsed = raw ? JSON.parse(raw) : DEFAULT_CATEGORY_ADDONS;
+        const normalized = normalizeAddonsMap(parsed);
+        localStorage.setItem(LS_ADDONS, JSON.stringify(normalized));
+        return normalized;
+      } catch {
+        const fallback = normalizeAddonsMap(DEFAULT_CATEGORY_ADDONS);
+        localStorage.setItem(LS_ADDONS, JSON.stringify(fallback));
+        return fallback;
+      }
+    }
+
+    function saveCategoryAddons(map){
+      const normalized = normalizeAddonsMap(map);
+      categoryAddons = normalized;
+      localStorage.setItem(LS_ADDONS, JSON.stringify(normalized));
+    }
+
+    let categoryAddons = loadCategoryAddons();
+
+    function addonOptionsForCategory(category){
+      const key = String(category || "").trim().toLowerCase();
+      const variants = new Set([key]);
+      if (key.endsWith("s")) variants.add(key.slice(0, -1));
+      if (key && !key.endsWith("s")) variants.add(`${key}s`);
+      if (key === "pizza") variants.add("pizzas");
+      if (key === "lanche") variants.add("lanches");
+      if (key === "bebida") variants.add("bebidas");
+      if (key === "sobremesa") variants.add("sobremesas");
+      if (key === "extra") variants.add("extras");
+      if (key === "açai") variants.add("acai");
+      if (key === "acai") variants.add("açai");
+
+      for (const candidate of variants){
+        const byCategory = categoryAddons[candidate];
+        if (Array.isArray(byCategory) && byCategory.length) return byCategory;
+      }
+      return categoryAddons._default || [{ name: "Sem adicional", price: 0 }];
+    }
+
+    function addonOptionLabel(addon){
+      const addonName = normalizeAddonName(addon?.name || "");
+      const addonPrice = roundMoney(Math.max(0, Number(addon?.price || 0)));
+      if (!addonName) return "";
+      if (addonName.toLowerCase() === "sem adicional") return addonName;
+      return `${addonName} (+${brl(addonPrice)})`;
+    }
+
+    function buildRegularItemNotes(addon, rawNote){
+      const parts = [];
+      const addonName = normalizeAddonName(typeof addon === "string" ? addon : (addon?.name || ""));
+      const addonPriceRaw = typeof addon === "string" ? 0 : Number(addon?.price || 0);
+      const addonPrice = roundMoney(Math.max(0, addonPriceRaw));
+      const noteTxt = String(rawNote || "").trim();
+      if (addonName && addonName.toLowerCase() !== "sem adicional"){
+        const addonLabel = addonOptionLabel({ name: addonName, price: addonPrice });
+        parts.push(`Acomp.: ${addonLabel}`);
+      }
+      if (noteTxt){
+        parts.push(noteTxt);
+      }
+      return parts.join(" • ");
+    }
+
     // ===== UI/DOM =====
     const els = {
       clock: document.getElementById("clock"),
       systemBtn: document.getElementById("systemBtn"),
+      addonManagerBtn: document.getElementById("addonManagerBtn"),
       systemModal: document.getElementById("systemModal"),
       systemClose: document.getElementById("systemClose"),
+      addonModal: document.getElementById("addonModal"),
+      addonClose: document.getElementById("addonClose"),
+      addonCancel: document.getElementById("addonCancel"),
+      addonEditModal: document.getElementById("addonEditModal"),
+      addonEditClose: document.getElementById("addonEditClose"),
+      addonEditCancel: document.getElementById("addonEditCancel"),
+      addonEditSave: document.getElementById("addonEditSave"),
       rolePill: document.getElementById("rolePill"),
       roleText: document.getElementById("roleText"),
       roleDot: document.getElementById("roleDot"),
@@ -1515,6 +1907,13 @@ function syncSubcatSelect(){
       logClearBtn: document.getElementById("logClearBtn"),
       logList: document.getElementById("logList"),
       cancelSaleBtn: document.getElementById("cancelSaleBtn"),
+      addonCategorySelect: document.getElementById("addonCategorySelect"),
+      addonNameInput: document.getElementById("addonNameInput"),
+      addonPriceInput: document.getElementById("addonPriceInput"),
+      addonAddBtn: document.getElementById("addonAddBtn"),
+      addonList: document.getElementById("addonList"),
+      addonEditNameInput: document.getElementById("addonEditNameInput"),
+      addonEditPriceInput: document.getElementById("addonEditPriceInput"),
       miniRole: document.getElementById("miniRole"),
       miniCash: document.getElementById("miniCash"),
       miniStorage: document.getElementById("miniStorage"),
@@ -1543,6 +1942,16 @@ function syncSubcatSelect(){
       confirmClose: document.getElementById("confirmClose"),
       confirmCancel: document.getElementById("confirmCancel"),
       confirmOk: document.getElementById("confirmOk"),
+      itemModal: document.getElementById("itemModal"),
+      itemTitle: document.getElementById("itemTitle"),
+      itemClose: document.getElementById("itemClose"),
+      itemCancel: document.getElementById("itemCancel"),
+      itemName: document.getElementById("itemName"),
+      itemAddon: document.getElementById("itemAddon"),
+      itemAddonHint: document.getElementById("itemAddonHint"),
+      itemNotes: document.getElementById("itemNotes"),
+      itemRemove: document.getElementById("itemRemove"),
+      itemAdd: document.getElementById("itemAdd"),
       categoryTabs: document.getElementById("categoryTabs"),
       activeCategoryLabel: document.getElementById("activeCategoryLabel"),
       searchInput: document.getElementById("searchInput"),
@@ -1596,7 +2005,6 @@ function syncSubcatSelect(){
       pPrice: document.getElementById("pPrice"),
       pPriceP: document.getElementById("pPriceP"),
       pPriceM: document.getElementById("pPriceM"),
-      pPriceG: document.getElementById("pPriceG"),
       priceSingleBlock: document.getElementById("priceSingleBlock"),
       pricePizzaBlock: document.getElementById("pricePizzaBlock"),
       kitchenBlock: document.getElementById("kitchenBlock"),
@@ -1612,6 +2020,8 @@ function syncSubcatSelect(){
       halfSeg: document.getElementById("halfSeg"),
       flavor1: document.getElementById("flavor1"),
       flavor2: document.getElementById("flavor2"),
+      pizzaAddon: document.getElementById("pizzaAddon"),
+      pizzaAddonHint: document.getElementById("pizzaAddonHint"),
       pizzaNotes: document.getElementById("pizzaNotes"),
       pizzaPrice: document.getElementById("pizzaPrice"),
       pizzaAdd: document.getElementById("pizzaAdd"),
@@ -1758,9 +2168,25 @@ function syncSubcatSelect(){
         byTable.set(key, entry);
       }
       return Array.from(byTable.values()).sort((a, b) => {
+        const sa = String(a.table_no || "").trim();
+        const sb = String(b.table_no || "").trim();
+        const emptyA = !sa || sa === "-";
+        const emptyB = !sb || sb === "-";
+        if (emptyA !== emptyB) return emptyA ? 1 : -1;
+
+        const na = Number.parseInt(sa, 10);
+        const nb = Number.parseInt(sb, 10);
+        const numA = Number.isFinite(na);
+        const numB = Number.isFinite(nb);
+        if (numA && numB && na !== nb) return na - nb;
+        if (numA !== numB) return numA ? -1 : 1;
+
+        const byLabel = sa.localeCompare(sb, "pt-BR", { numeric: true, sensitivity: "base" });
+        if (byLabel !== 0) return byLabel;
+
         const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
         const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
-        return tb - ta;
+        return ta - tb;
       });
     }
 
@@ -1777,13 +2203,13 @@ function syncSubcatSelect(){
       }
 
       els.opsTables.innerHTML = grouped.map(g => {
-        const mesa = g.table_no && g.table_no !== "-" ? `Mesa ${escapeHtml(g.table_no)}` : "Mesa";
+        const mesaNo = g.table_no && g.table_no !== "-" ? String(g.table_no) : "-";
         const total = brl(Number(g.total || 0));
         const count = Math.max(1, Number(g.order_count || g.order_ids.length || 1));
         const pedidoTxt = count > 1 ? `${count} pedidos` : "1 pedido";
         const ids = g.order_ids.join(",");
         const names = Array.from(g.names || []);
-        const namesText = names.length ? `${escapeHtml(names.join(" / "))}` : "";
+        const namesText = names.length ? names.join(" / ") : "";
         const itemsList = Array.from(g.items.values());
         const totalItems = itemsList.reduce((acc, it) => acc + Number(it.qty || 0), 0);
         const itemsText = totalItems === 1 ? "1 item" : `${totalItems} itens`;
@@ -1795,16 +2221,20 @@ function syncSubcatSelect(){
             }).join("")}</div>`
           : `<div class="opsMeta">Itens indisponíveis</div>`;
         return `
-          <div class="opsItem">
-            <div>
-              <div class="opsTitle">${mesa} • ${escapeHtml(pedidoTxt)}${namesText ? ` • ${namesText}` : ""}</div>
-              <div class="opsMeta">${escapeHtml(fmtDateTime(g.created_at))} • Total ${escapeHtml(total)}</div>
-              <div class="opsMeta">${escapeHtml(itemsText)}</div>
-              <button class="miniBtn" type="button" data-action="toggle-items" data-target="${escapeHtml(toggleId)}">Ver itens</button>
-              ${itemsHtml}
+          <article class="opsItem mesaCard">
+            <div class="mesaHead">
+              <div class="mesaBubble">Mesa ${escapeHtml(mesaNo)}</div>
+              <div class="mesaTotal">${escapeHtml(total)}</div>
             </div>
-            <button class="miniBtn" type="button" data-action="close-table" data-order-ids="${escapeHtml(ids)}">Carregar mesa</button>
-          </div>
+            <div class="opsMeta">${escapeHtml(pedidoTxt)} • ${escapeHtml(itemsText)}</div>
+            ${namesText ? `<div class="opsMeta">${escapeHtml(namesText)}</div>` : ""}
+            <div class="opsMeta">${escapeHtml(fmtDateTime(g.created_at))}</div>
+            <div class="mesaActions">
+              <button class="miniBtn" type="button" data-action="toggle-items" data-target="${escapeHtml(toggleId)}">Ver itens</button>
+              <button class="miniBtn" type="button" data-action="close-table" data-order-ids="${escapeHtml(ids)}">Carregar</button>
+            </div>
+            ${itemsHtml}
+          </article>
         `;
       }).join("");
     }
@@ -1816,21 +2246,24 @@ function syncSubcatSelect(){
       }
 
       els.opsKitchen.innerHTML = rows.map(r => {
-        const qtyName = `${r.qty}x ${r.name}`;
+        const qty = Number(r.qty || 0);
+        const itemName = String(r.name || "Item");
         const origin = (String(r.order_type) === "mesa" && r.table_no)
           ? `Mesa ${r.table_no}`
           : prettyType(r.order_type);
         const notes = (r.notes || "").trim();
         const meta = `Pedido #${r.order_number} • ${origin} • ${fmtDateTime(r.created_at)}`;
         return `
-          <div class="opsItem">
-            <div>
-              <div class="opsTitle">${escapeHtml(qtyName)}</div>
-              <div class="opsMeta">${escapeHtml(meta)}</div>
-              ${notes ? `<div class="opsMeta">Obs: ${escapeHtml(notes)}</div>` : ""}
+          <article class="opsItem kitchenCard">
+            <div class="kitchenHead">
+              <span class="kitchenStatus">Em preparo</span>
+              <span class="kitchenQty">${escapeHtml(`${qty}x`)}</span>
             </div>
+            <div class="opsTitle">${escapeHtml(itemName)}</div>
+            <div class="opsMeta">${escapeHtml(meta)}</div>
+            ${notes ? `<div class="opsMeta">Obs: ${escapeHtml(notes)}</div>` : ""}
             <button class="miniBtn" type="button" data-action="ready-item" data-id="${escapeHtml(String(r.id))}">Pronto</button>
-          </div>
+          </article>
         `;
       }).join("");
     }
@@ -2072,16 +2505,18 @@ function syncSubcatSelect(){
         const statusLabel = status === "DESPACHADO" ? "Despachado" : "Em preparo";
         const actionLabel = status === "DESPACHADO" ? "Finalizar" : "Despachar";
         const action = status === "DESPACHADO" ? "finalize" : "dispatch";
+        const statusClass = status === "DESPACHADO" ? "is-dispatched" : "is-prep";
         return `
-          <div class="opsItem">
-            <div>
-              <div class="opsTitle">${statusLabel}</div>
-              <div class="opsMeta">${escapeHtml(meta)} • Total ${escapeHtml(total)}</div>
-              <div class="opsMeta">${customer}</div>
-              <div class="opsMeta">${address}</div>
+          <article class="opsItem deliveryCard">
+            <div class="deliveryHead">
+              <span class="deliveryStatus ${statusClass}">${statusLabel}</span>
+              <span class="deliveryTotal">${escapeHtml(total)}</span>
             </div>
+            <div class="opsMeta">${escapeHtml(meta)}</div>
+            <div class="opsMeta">${customer}</div>
+            <div class="opsMeta">${address}</div>
             <button class="miniBtn" type="button" data-action="${action}" data-id="${escapeHtml(String(r.id))}">${actionLabel}</button>
-          </div>
+          </article>
         `;
       }).join("");
     }
@@ -2153,14 +2588,16 @@ function syncSubcatSelect(){
       const btn = e.target.closest("button[data-report]");
       if (!btn) return;
       const period = btn.dataset.report;
+      const mode = btn.dataset.mode === "detailed" ? "detailed" : "normal";
 
       if (period === "last"){
-        openPrintUrl("/api/cash/report/print");
+        const qs = new URLSearchParams({ mode }).toString();
+        openPrintUrl(`/api/cash/report/print?${qs}`);
         return;
       }
 
       const date = (els.reportDate && els.reportDate.value) ? els.reportDate.value : todayISODate();
-      const qs = new URLSearchParams({ period, date }).toString();
+      const qs = new URLSearchParams({ period, date, mode }).toString();
       openPrintUrl(`/api/reports/print?${qs}`);
     });
 
@@ -2369,30 +2806,246 @@ function syncSubcatSelect(){
       });
     }
 
-    function openSystemModal(){
-      if (!els.systemModal) return;
-      if (!isManager()){
-        openManagerLoginModal();
+    function addonCategoryLabel(id){
+      const key = String(id || "").trim().toLowerCase();
+      if (key === "_default") return "Padrão (outras categorias)";
+      const category = categories.find((c) => c.id === key);
+      if (category){
+        return `${category.emoji || "🏷️"} ${category.label}`;
+      }
+      return prettyCatLabel(key);
+    }
+
+    function renderAddonCategorySelect(){
+      if (!els.addonCategorySelect) return;
+      const current = String(els.addonCategorySelect.value || "").trim().toLowerCase();
+      const keys = new Set(["_default"]);
+      for (const c of categories){
+        if (c?.id) keys.add(String(c.id).trim().toLowerCase());
+      }
+      for (const k of Object.keys(categoryAddons || {})){
+        if (k) keys.add(String(k).trim().toLowerCase());
+      }
+
+      const sorted = Array.from(keys).filter(Boolean).sort((a, b) => {
+        if (a === "_default") return -1;
+        if (b === "_default") return 1;
+        return addonCategoryLabel(a).localeCompare(addonCategoryLabel(b), "pt-BR");
+      });
+
+      els.addonCategorySelect.innerHTML = sorted.map((id) => (
+        `<option value="${escapeAttr(id)}">${escapeHtml(addonCategoryLabel(id))}</option>`
+      )).join("");
+
+      const next = sorted.includes(current) ? current : (sorted[0] || "_default");
+      els.addonCategorySelect.value = next;
+    }
+
+    function renderAddonList(){
+      if (!els.addonList || !els.addonCategorySelect) return;
+      const categoryId = String(els.addonCategorySelect.value || "_default").trim().toLowerCase();
+      const addons = addonOptionsForCategory(categoryId)
+        .filter((entry) => String(entry?.name || "").toLowerCase() !== "sem adicional");
+
+      if (!addons.length){
+        els.addonList.innerHTML = `<div class="opsEmpty">Nenhum acompanhamento extra nesta categoria.</div>`;
         return;
       }
+
+      els.addonList.innerHTML = addons.map((entry) => {
+        const name = normalizeAddonName(entry?.name || "");
+        const price = roundMoney(Math.max(0, Number(entry?.price || 0)));
+        return `
+        <div class="opsItem">
+          <div>
+            <div class="opsTitle">${escapeHtml(name)}</div>
+            <div class="opsMeta">${escapeHtml(brl(price))}</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button class="miniBtn" type="button" data-action="edit-addon" data-name="${escapeAttr(name)}" data-role-only="manager">Editar</button>
+            <button class="miniBtn danger" type="button" data-action="del-addon" data-name="${escapeAttr(name)}" data-role-only="manager">Excluir</button>
+          </div>
+        </div>
+      `;
+      }).join("");
+      applyRoleLocks();
+    }
+
+    function refreshAddonManager(){
+      renderAddonCategorySelect();
+      renderAddonList();
+    }
+
+    function addAddonFromEditor(){
+      if (!requireManager()) return;
+      if (!els.addonCategorySelect || !els.addonNameInput) return;
+
+      const categoryId = String(els.addonCategorySelect.value || "_default").trim().toLowerCase();
+      const name = normalizeAddonName(els.addonNameInput.value);
+      const priceRaw = String(els.addonPriceInput?.value || "").trim();
+      const priceParsed = priceRaw ? parseMoneyFlexible(priceRaw) : 0;
+      const price = roundMoney(Math.max(0, Number(priceParsed || 0)));
+      if (!name){
+        toast("Informe o acompanhamento.", "error");
+        els.addonNameInput.focus();
+        return;
+      }
+      if (!Number.isFinite(priceParsed) && priceRaw){
+        toast("Valor inválido. Ex: 2,50", "error");
+        els.addonPriceInput?.focus();
+        return;
+      }
+      if (name.toLowerCase() === "sem adicional"){
+        toast("\"Sem adicional\" já é padrão.", "info");
+        return;
+      }
+
+      const current = addonOptionsForCategory(categoryId).slice();
+      if (current.some((x) => String(x?.name || "").toLowerCase() === name.toLowerCase())){
+        toast("Acompanhamento já existe nesta categoria.", "info");
+        return;
+      }
+
+      current.push({ name, price });
+      categoryAddons[categoryId] = current;
+      saveCategoryAddons(categoryAddons);
+      refreshAddonManager();
+      els.addonNameInput.value = "";
+      if (els.addonPriceInput) els.addonPriceInput.value = "";
+      els.addonNameInput.focus();
+      toast("Acompanhamento adicionado.", "success");
+    }
+
+    function removeAddonFromEditor(nameRaw){
+      if (!requireManager()) return;
+      if (!els.addonCategorySelect) return;
+
+      const categoryId = String(els.addonCategorySelect.value || "_default").trim().toLowerCase();
+      const target = normalizeAddonName(nameRaw);
+      if (!target) return;
+
+      const current = addonOptionsForCategory(categoryId)
+        .filter((entry) => String(entry?.name || "").toLowerCase() !== target.toLowerCase());
+      categoryAddons[categoryId] = current;
+      saveCategoryAddons(categoryAddons);
+      refreshAddonManager();
+      toast("Acompanhamento removido.", "success");
+    }
+
+    let addonEditContext = null;
+
+    function closeAddonEditModal(){
+      if (els.addonEditModal) els.addonEditModal.style.display = "none";
+      addonEditContext = null;
+      if (els.addonEditNameInput) els.addonEditNameInput.value = "";
+      if (els.addonEditPriceInput) els.addonEditPriceInput.value = "";
+    }
+
+    function saveAddonEditFromModal(){
+      if (!requireManager()) return;
+      if (!addonEditContext) return;
+
+      const nextName = normalizeAddonName(els.addonEditNameInput?.value || "");
+      const nextPriceRaw = String(els.addonEditPriceInput?.value || "").trim();
+      const nextPriceParsed = nextPriceRaw ? parseMoneyFlexible(nextPriceRaw) : 0;
+
+      if (!nextName){
+        toast("Informe um nome válido.", "error");
+        els.addonEditNameInput?.focus();
+        return;
+      }
+      if (nextName.toLowerCase() === "sem adicional"){
+        toast("\"Sem adicional\" já é padrão.", "info");
+        return;
+      }
+      if (!Number.isFinite(nextPriceParsed) || nextPriceParsed < 0){
+        toast("Valor inválido. Ex: 2,50", "error");
+        els.addonEditPriceInput?.focus();
+        return;
+      }
+      const nextPrice = roundMoney(nextPriceParsed);
+
+      const { categoryId, currentName } = addonEditContext;
+      const current = addonOptionsForCategory(categoryId).slice();
+      const idx = current.findIndex((entry) => String(entry?.name || "").toLowerCase() === currentName.toLowerCase());
+      if (idx < 0){
+        toast("Acompanhamento não encontrado.", "error");
+        closeAddonEditModal();
+        return;
+      }
+      if (current.some((entry, i) => i !== idx && String(entry?.name || "").toLowerCase() === nextName.toLowerCase())){
+        toast("Já existe acompanhamento com esse nome.", "info");
+        return;
+      }
+
+      current[idx] = { name: nextName, price: nextPrice };
+      categoryAddons[categoryId] = current;
+      saveCategoryAddons(categoryAddons);
+      refreshAddonManager();
+      closeAddonEditModal();
+      toast("Acompanhamento atualizado.", "success");
+    }
+
+    function editAddonFromEditor(nameRaw){
+      if (!requireManager()) return;
+      if (!els.addonCategorySelect || !els.addonEditModal) return;
+
+      const categoryId = String(els.addonCategorySelect.value || "_default").trim().toLowerCase();
+      const currentName = normalizeAddonName(nameRaw);
+      if (!currentName) return;
+
+      const current = addonOptionsForCategory(categoryId).slice();
+      const idx = current.findIndex((entry) => String(entry?.name || "").toLowerCase() === currentName.toLowerCase());
+      if (idx < 0){
+        toast("Acompanhamento não encontrado.", "error");
+        return;
+      }
+
+      const currentEntry = current[idx] || { name: currentName, price: 0 };
+      const currentPrice = roundMoney(Math.max(0, Number(currentEntry?.price || 0)));
+      addonEditContext = { categoryId, currentName };
+      if (els.addonEditNameInput) els.addonEditNameInput.value = normalizeAddonName(currentEntry?.name || currentName);
+      if (els.addonEditPriceInput) els.addonEditPriceInput.value = String(currentPrice).replace(".", ",");
+      els.addonEditModal.style.display = "flex";
+      applyRoleLocks();
+      setTimeout(() => els.addonEditNameInput?.focus(), 0);
+    }
+
+    function openSystemModal(){
+      if (!els.systemModal) return;
       closeOtherModals();
       renderLogs();
       loadDiagnostics();
       updateMiniStatus();
       updateSystemLock();
       updateBackupHint();
+      if (!isManager()){
+        toast("Modo operador: recursos administrativos bloqueados.", "info");
+      }
       els.systemModal.style.display = "flex";
+    }
+
+    function openAddonManager(){
+      if (!els.addonModal) return;
+      closeOtherModals();
+      refreshAddonManager();
+      applyRoleLocks();
+      if (els.addonNameInput) els.addonNameInput.value = "";
+      if (els.addonPriceInput) els.addonPriceInput.value = "";
+      if (!isManager()){
+        toast("Modo operador: recursos administrativos bloqueados.", "info");
+      }
+      els.addonModal.style.display = "flex";
+      setTimeout(() => els.addonCategorySelect?.focus(), 0);
+    }
+
+    function closeAddonManager(){
+      if (els.addonModal) els.addonModal.style.display = "none";
+      closeAddonEditModal();
     }
 
     function closeSystemModal(){
       if (els.systemModal) els.systemModal.style.display = "none";
-    }
-
-    function openManagerLoginModal(){
-      if (!els.managerLoginModal) return;
-      closeOtherModals();
-      els.managerLoginModal.style.display = "flex";
-      setTimeout(() => els.managerPinInputLogin?.focus(), 0);
     }
 
     function closeManagerLoginModal(){
@@ -2400,9 +3053,21 @@ function syncSubcatSelect(){
     }
 
     if (els.systemBtn) els.systemBtn.addEventListener("click", openSystemModal);
+    if (els.addonManagerBtn) els.addonManagerBtn.addEventListener("click", openAddonManager);
     if (els.systemClose) els.systemClose.addEventListener("click", closeSystemModal);
     if (els.systemModal) els.systemModal.addEventListener("click", (e) => {
       if (e.target === els.systemModal) closeSystemModal();
+    });
+    if (els.addonClose) els.addonClose.addEventListener("click", closeAddonManager);
+    if (els.addonCancel) els.addonCancel.addEventListener("click", closeAddonManager);
+    if (els.addonModal) els.addonModal.addEventListener("click", (e) => {
+      if (e.target === els.addonModal) closeAddonManager();
+    });
+    if (els.addonEditClose) els.addonEditClose.addEventListener("click", closeAddonEditModal);
+    if (els.addonEditCancel) els.addonEditCancel.addEventListener("click", closeAddonEditModal);
+    if (els.addonEditSave) els.addonEditSave.addEventListener("click", saveAddonEditFromModal);
+    if (els.addonEditModal) els.addonEditModal.addEventListener("click", (e) => {
+      if (e.target === els.addonEditModal) closeAddonEditModal();
     });
     if (els.rolePill) els.rolePill.addEventListener("click", () => {
       openSystemModal();
@@ -2540,6 +3205,46 @@ function syncSubcatSelect(){
         logEvent("info", "Backup automático", enabled ? "Ativado" : "Desativado");
       });
     }
+
+    if (els.addonCategorySelect) els.addonCategorySelect.addEventListener("change", renderAddonList);
+    if (els.addonAddBtn) els.addonAddBtn.addEventListener("click", addAddonFromEditor);
+    if (els.addonNameInput) els.addonNameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter"){
+        e.preventDefault();
+        addAddonFromEditor();
+      }
+    });
+    if (els.addonPriceInput) els.addonPriceInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter"){
+        e.preventDefault();
+        addAddonFromEditor();
+      }
+    });
+    if (els.addonEditNameInput) els.addonEditNameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter"){
+        e.preventDefault();
+        saveAddonEditFromModal();
+      }
+    });
+    if (els.addonEditPriceInput) els.addonEditPriceInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter"){
+        e.preventDefault();
+        saveAddonEditFromModal();
+      }
+    });
+    if (els.addonList) els.addonList.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-action]");
+      if (!btn) return;
+      const action = btn.dataset.action;
+      const name = btn.dataset.name || "";
+      if (action === "edit-addon"){
+        editAddonFromEditor(name);
+        return;
+      }
+      if (action === "del-addon"){
+        removeAddonFromEditor(name);
+      }
+    });
     if (els.diagRefreshBtn) els.diagRefreshBtn.addEventListener("click", loadDiagnostics);
     if (els.logClearBtn) els.logClearBtn.addEventListener("click", () => {
       if (!requireManager()) return;
@@ -2602,7 +3307,9 @@ function syncSubcatSelect(){
 
     function productMainPrice(p){
       if (p.category === "pizzas"){
-        const min = Math.min(Number(p.priceP||0), Number(p.priceM||0), Number(p.priceG||0));
+        const broto = Number.isFinite(Number(p.priceP)) ? Number(p.priceP) : Number(p.priceM ?? p.priceG ?? 0);
+        const normal = Number.isFinite(Number(p.priceM)) ? Number(p.priceM) : Number(p.priceG ?? p.priceP ?? 0);
+        const min = Math.min(Math.max(0, broto), Math.max(0, normal));
         return `a partir de ${brl(min)}`;
       }
       return brl(Number(p.price || 0));
@@ -2747,8 +3454,7 @@ function syncSubcatSelect(){
 
         if (product.category === "pizzas"){
           els.pPriceP.value = String(product.priceP ?? "").replace(".", ",");
-          els.pPriceM.value = String(product.priceM ?? "").replace(".", ",");
-          els.pPriceG.value = String(product.priceG ?? "").replace(".", ",");
+          els.pPriceM.value = String((product.priceM ?? product.priceG ?? "")).replace(".", ",");
         } else {
           els.pPrice.value = String(product.price ?? "").replace(".", ",");
         }
@@ -2762,7 +3468,6 @@ function syncSubcatSelect(){
         els.pPrice.value = "";
         els.pPriceP.value = "";
         els.pPriceM.value = "";
-        els.pPriceG.value = "";
         els.pIsKitchen.value = "1";
         els.pIsKitchenPizza.value = "1";
       }
@@ -2826,6 +3531,7 @@ function syncSubcatSelect(){
       activeCategory = id;
       renderCategoryTabs();
       renderCategorySelect();
+      refreshAddonManager();
       syncTabs();
       renderProducts();
       renderCategoryEditor();
@@ -2888,6 +3594,7 @@ function syncSubcatSelect(){
       renderCategoryEditor();
       renderCategoryTabs();
       renderCategorySelect();
+      refreshAddonManager();
       syncTabs();
       renderProducts();
       toast("Categoria removida.", "success");
@@ -2921,15 +3628,14 @@ function syncSubcatSelect(){
       if (category === "pizzas"){
         const priceP = parsePrice(els.pPriceP.value);
         const priceM = parsePrice(els.pPriceM.value);
-        const priceG = parsePrice(els.pPriceG.value);
         const subcat = normalizeSubcat(els.pSubcat?.value || activePizzaSubcat || pizzaSubcats[0]);
 
-        if (![priceP, priceM, priceG].every(v => Number.isFinite(v) && v >= 0)){
-          toast("Preços P/M/G inválidos. Ex: 49,90", "error");
+        if (![priceP, priceM].every(v => Number.isFinite(v) && v >= 0)){
+          toast("Preços BROTO/Normal inválidos. Ex: 49,90", "error");
           return;
         }
 
-        product = { name, category, emoji, desc, priceP, priceM, priceG, isKitchen, subcat };
+        product = { name, category, emoji, desc, priceP, priceM, priceG: undefined, isKitchen, subcat };
       } else {
         const price = parsePrice(els.pPrice.value);
         if (!Number.isFinite(price) || price < 0){
@@ -2965,15 +3671,15 @@ function syncSubcatSelect(){
       saveProducts(products);
 
       for (const key of cart.keys()){
-        if (key.startsWith("item|") && key.endsWith(id)) cart.delete(key);
+        if (key === `item|${id}` || key.startsWith(`item|${id}|`)) cart.delete(key);
       }
 
       renderProducts();
       renderCart();
     }
 
-    // ===== Pizza Modal (PMG + meio a meio) =====
-    let pizzaState = { size:"M", half:false, flavor1Id:null, flavor2Id:null, notes:"" };
+    // ===== Pizza Modal (BROTO/Normal + meio a meio) =====
+    let pizzaState = { size:"NORMAL", half:false, flavor1Id:null, flavor2Id:null, addonIndex:0, notes:"" };
 
     function setSegActive(segEl, attr, value){
       Array.from(segEl.querySelectorAll("button")).forEach(b => {
@@ -2981,10 +3687,41 @@ function syncSubcatSelect(){
       });
     }
 
+    function pizzaSizeLabel(size){
+      return size === "BROTO" ? "BROTO" : "Normal";
+    }
+
     function priceForSize(pizzaProduct, size){
-      if (size === "P") return Number(pizzaProduct.priceP || 0);
-      if (size === "M") return Number(pizzaProduct.priceM || 0);
-      return Number(pizzaProduct.priceG || 0);
+      if (size === "BROTO"){
+        const broto = Number(pizzaProduct.priceP ?? pizzaProduct.priceM ?? pizzaProduct.priceG ?? 0);
+        return Number.isFinite(broto) ? broto : 0;
+      }
+      // "Normal" usa preço M; se não existir, cai para legado.
+      const normal = Number(pizzaProduct.priceM ?? pizzaProduct.priceG ?? pizzaProduct.priceP ?? 0);
+      return Number.isFinite(normal) ? normal : 0;
+    }
+
+    function currentPizzaAddonFromModal(){
+      const options = addonOptionsForCategory("pizzas");
+      const idxRaw = Number.parseInt(String(els.pizzaAddon?.value || pizzaState.addonIndex || 0), 10);
+      const idx = Number.isFinite(idxRaw) ? idxRaw : 0;
+      const chosen = options[idx] || options[0] || { name: "Sem adicional", price: 0 };
+      return {
+        name: normalizeAddonName(chosen?.name || "Sem adicional") || "Sem adicional",
+        price: roundMoney(Math.max(0, Number(chosen?.price || 0))),
+      };
+    }
+
+    function renderPizzaAddonSelect(){
+      if (!els.pizzaAddon) return;
+      const options = addonOptionsForCategory("pizzas");
+      els.pizzaAddon.innerHTML = options.map((opt, idx) => (
+        `<option value="${idx}">${escapeHtml(addonOptionLabel(opt))}</option>`
+      )).join("");
+      const maxIndex = Math.max(0, options.length - 1);
+      const safeIndex = Math.min(Math.max(0, Number(pizzaState.addonIndex || 0)), maxIndex);
+      pizzaState.addonIndex = safeIndex;
+      els.pizzaAddon.value = String(safeIndex);
     }
 
     function updatePizzaPrice(){
@@ -2993,15 +3730,24 @@ function syncSubcatSelect(){
       if (!f1){ els.pizzaPrice.value = "—"; return; }
 
       const p1 = priceForSize(f1, pizzaState.size);
+      const addon = currentPizzaAddonFromModal();
+      const addonPrice = roundMoney(Math.max(0, Number(addon.price || 0)));
 
+      let final = p1;
       if (!pizzaState.half){
-        els.pizzaPrice.value = brl(p1);
-        return;
+        final = p1;
+      } else {
+        const p2 = f2 ? priceForSize(f2, pizzaState.size) : p1;
+        final = Math.max(p1, p2);
       }
-
-      const p2 = f2 ? priceForSize(f2, pizzaState.size) : p1;
-      const final = Math.max(p1, p2);
+      final = roundMoney(final + addonPrice);
       els.pizzaPrice.value = brl(final) + " (meio a meio)";
+      if (!pizzaState.half) els.pizzaPrice.value = brl(final);
+      if (els.pizzaAddonHint){
+        els.pizzaAddonHint.textContent = addonPrice > 0
+          ? `Adicional selecionado: ${addon.name} (+${brl(addonPrice)}).`
+          : "Opcional. Soma no valor final da pizza.";
+      }
     }
 
     function openPizzaModal(defaultFlavorId){
@@ -3014,14 +3760,16 @@ function syncSubcatSelect(){
       els.flavor1.innerHTML = pizzaFlavors.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("");
       els.flavor2.innerHTML = pizzaFlavors.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("");
 
-      pizzaState.size = "M";
+      pizzaState.size = "NORMAL";
       pizzaState.half = false;
       pizzaState.flavor1Id = defaultFlavorId || pizzaFlavors[0].id;
       pizzaState.flavor2Id = pizzaFlavors[1]?.id || pizzaState.flavor1Id;
+      pizzaState.addonIndex = 0;
       pizzaState.notes = "";
 
       els.flavor1.value = pizzaState.flavor1Id;
       els.flavor2.value = pizzaState.flavor2Id;
+      renderPizzaAddonSelect();
       els.pizzaNotes.value = "";
 
       setSegActive(els.sizeSeg, "data-size", pizzaState.size);
@@ -3051,6 +3799,11 @@ function syncSubcatSelect(){
 
     els.flavor1.addEventListener("change", () => { pizzaState.flavor1Id = els.flavor1.value; updatePizzaPrice(); });
     els.flavor2.addEventListener("change", () => { pizzaState.flavor2Id = els.flavor2.value; updatePizzaPrice(); });
+    if (els.pizzaAddon) els.pizzaAddon.addEventListener("change", () => {
+      const idxRaw = Number.parseInt(String(els.pizzaAddon?.value || "0"), 10);
+      pizzaState.addonIndex = Number.isFinite(idxRaw) ? idxRaw : 0;
+      updatePizzaPrice();
+    });
     els.pizzaNotes.addEventListener("input", () => { pizzaState.notes = els.pizzaNotes.value; });
 
     els.pizzaClose.addEventListener("click", closePizzaModal);
@@ -3064,16 +3817,20 @@ function syncSubcatSelect(){
 
       const p1 = priceForSize(f1, pizzaState.size);
       let unit = p1;
-      let name = `Pizza ${f1.name} (${pizzaState.size})`;
+      const sizeLabel = pizzaSizeLabel(pizzaState.size);
+      let name = `Pizza ${f1.name} (${sizeLabel})`;
+      const addon = currentPizzaAddonFromModal();
 
       if (pizzaState.half && f2){
         const p2 = priceForSize(f2, pizzaState.size);
         unit = Math.max(p1, p2);
-        name = `Pizza Meio a Meio: ${f1.name} + ${f2.name} (${pizzaState.size})`;
+        name = `Pizza Meio a Meio: ${f1.name} + ${f2.name} (${sizeLabel})`;
       }
+      unit = roundMoney(unit + Math.max(0, Number(addon.price || 0)));
 
-      const notes = (pizzaState.notes || "").trim();
-      const key = `pizza|${pizzaState.size}|${pizzaState.half ? "half" : "full"}|${pizzaState.flavor1Id}|${pizzaState.half ? pizzaState.flavor2Id : ""}|${notes}`;
+      const notes = buildRegularItemNotes(addon, pizzaState.notes);
+      const addonToken = encodeURIComponent(`${addon.name}|${roundMoney(addon.price || 0).toFixed(2)}`);
+      const key = `pizza|${pizzaState.size}|${pizzaState.half ? "half" : "full"}|${pizzaState.flavor1Id}|${pizzaState.half ? pizzaState.flavor2Id : ""}|addon:${addonToken}|${notes}`;
 
       const existing = cart.get(key);
       if (existing) existing.qty += 1;
@@ -3091,6 +3848,145 @@ function syncSubcatSelect(){
     });
 
     // ===== Clique produtos (add/edit/del) =====
+    const itemModalState = { productId: null };
+
+    function regularItemKey(productId, notes, addonPrice = 0){
+      const safeNotes = String(notes || "").trim();
+      const safeAddon = roundMoney(Math.max(0, Number(addonPrice || 0))).toFixed(2);
+      return safeNotes
+        ? `item|${productId}|ap:${safeAddon}|${safeNotes}`
+        : `item|${productId}|ap:${safeAddon}`;
+    }
+
+    function hasRegularItemInCart(productId){
+      for (const key of cart.keys()){
+        if (key === `item|${productId}` || key.startsWith(`item|${productId}|`)) return true;
+      }
+      return false;
+    }
+
+    function addRegularProductToCart(product, notes = "", addonPrice = 0){
+      const safeNotes = String(notes || "").trim();
+      const extra = roundMoney(Math.max(0, Number(addonPrice || 0)));
+      const key = regularItemKey(product.id, safeNotes, extra);
+      const existing = cart.get(key);
+      if (existing) existing.qty += 1;
+      else cart.set(key, {
+        name: product.name,
+        qty: 1,
+        unit_price: roundMoney(Number(product.price || 0) + extra),
+        notes: safeNotes,
+        is_kitchen: !!product.isKitchen,
+        emoji: product.emoji || "🧾"
+      });
+
+      renderCart();
+    }
+
+    function removeRegularProductFromCart(product, notes = "", addonPrice = 0){
+      const preferredKey = regularItemKey(product.id, notes, addonPrice);
+      let keyToUse = cart.has(preferredKey) ? preferredKey : null;
+      if (!keyToUse){
+        for (const key of cart.keys()){
+          if (key === `item|${product.id}` || key.startsWith(`item|${product.id}|`)){
+            keyToUse = key;
+            break;
+          }
+        }
+      }
+
+      if (!keyToUse){
+        toast("Item não está no carrinho.", "info");
+        return false;
+      }
+
+      const existing = cart.get(keyToUse);
+      if (!existing) return false;
+      existing.qty -= 1;
+      if (existing.qty <= 0) cart.delete(keyToUse);
+      renderCart();
+      return true;
+    }
+
+    function openRegularItemModal(product){
+      if (!els.itemModal || !els.itemAddon || !els.itemName) {
+        // fallback de segurança
+        addRegularProductToCart(product);
+        return;
+      }
+
+      itemModalState.productId = product.id;
+      if (els.itemTitle) els.itemTitle.textContent = `Ajustar item`;
+      els.itemName.value = product.name || "";
+
+      const options = addonOptionsForCategory(product.category);
+      els.itemAddon.innerHTML = options.map((opt, idx) => {
+        const label = addonOptionLabel(opt);
+        return `<option value="${idx}">${escapeHtml(label)}</option>`;
+      }).join("");
+      els.itemAddon.value = "0";
+
+      if (els.itemAddonHint){
+        els.itemAddonHint.textContent = `Categoria: ${prettyCatLabel(product.category)}`;
+      }
+
+      if (els.itemNotes) els.itemNotes.value = "";
+      if (els.itemRemove) els.itemRemove.disabled = !hasRegularItemInCart(product.id);
+
+      els.itemModal.style.display = "flex";
+      setTimeout(() => els.itemAddon.focus(), 0);
+    }
+
+    function closeRegularItemModal(){
+      if (els.itemModal) els.itemModal.style.display = "none";
+      itemModalState.productId = null;
+    }
+
+    function currentRegularItemFromModal(){
+      const id = itemModalState.productId;
+      if (!id) return null;
+      return products.find((p) => p.id === id) || null;
+    }
+
+    function currentRegularAddonFromModal(){
+      const product = currentRegularItemFromModal();
+      if (!product) return { name: "Sem adicional", price: 0 };
+      const options = addonOptionsForCategory(product.category);
+      const idxRaw = Number.parseInt(String(els.itemAddon?.value || "0"), 10);
+      const idx = Number.isFinite(idxRaw) ? idxRaw : 0;
+      const chosen = options[idx] || options[0] || { name: "Sem adicional", price: 0 };
+      return {
+        name: normalizeAddonName(chosen?.name || "Sem adicional") || "Sem adicional",
+        price: roundMoney(Math.max(0, Number(chosen?.price || 0))),
+      };
+    }
+
+    function currentRegularItemNotesFromModal(){
+      return buildRegularItemNotes(currentRegularAddonFromModal(), els.itemNotes?.value);
+    }
+
+    if (els.itemAdd) els.itemAdd.addEventListener("click", () => {
+      const product = currentRegularItemFromModal();
+      if (!product) return;
+      const addon = currentRegularAddonFromModal();
+      const notes = currentRegularItemNotesFromModal();
+      addRegularProductToCart(product, notes, addon.price);
+      closeRegularItemModal();
+    });
+    if (els.itemRemove) els.itemRemove.addEventListener("click", () => {
+      const product = currentRegularItemFromModal();
+      if (!product) return;
+      const addon = currentRegularAddonFromModal();
+      const notes = currentRegularItemNotesFromModal();
+      removeRegularProductFromCart(product, notes, addon.price);
+      closeRegularItemModal();
+    });
+    if (els.itemClose) els.itemClose.addEventListener("click", closeRegularItemModal);
+    if (els.itemCancel) els.itemCancel.addEventListener("click", closeRegularItemModal);
+    if (els.itemModal) els.itemModal.addEventListener("click", (e) => {
+      if (e.target === els.itemModal) closeRegularItemModal();
+    });
+
     els.products.addEventListener("click", (e) => {
       const btn = e.target.closest("button[data-action]");
       if (!btn) return;
@@ -3114,19 +4010,7 @@ function syncSubcatSelect(){
           return;
         }
 
-        const key = `item|${p.id}`;
-        const existing = cart.get(key);
-        if (existing) existing.qty += 1;
-        else cart.set(key, {
-          name: p.name,
-          qty: 1,
-          unit_price: Number(p.price || 0),
-          notes: "",
-          is_kitchen: !!p.isKitchen,
-          emoji: p.emoji || "🧾"
-        });
-
-        renderCart();
+        openRegularItemModal(p);
       }
 
       if (action === "edit"){
@@ -3458,6 +4342,7 @@ function syncSubcatSelect(){
     function closeOtherModals(){
       if (els.productModal) els.productModal.style.display = "none";
       if (els.pizzaModal) els.pizzaModal.style.display = "none";
+      if (els.itemModal) closeRegularItemModal();
       if (els.opsTablesModal) els.opsTablesModal.style.display = "none";
       if (els.opsKitchenModal) els.opsKitchenModal.style.display = "none";
       if (els.deliveryModal) els.deliveryModal.style.display = "none";
@@ -3466,6 +4351,8 @@ function syncSubcatSelect(){
       if (els.confirmModal) els.confirmModal.style.display = "none";
       if (els.reportsModal) els.reportsModal.style.display = "none";
       if (els.systemModal) els.systemModal.style.display = "none";
+      if (els.addonModal) els.addonModal.style.display = "none";
+      closeAddonEditModal();
       if (els.categoryModal) els.categoryModal.style.display = "none";
       if (els.emojiModal) els.emojiModal.style.display = "none";
       if (els.printModal) els.printModal.style.display = "none";
@@ -3719,6 +4606,10 @@ function syncSubcatSelect(){
         closePizzaModal();
         return true;
       }
+      if (els.itemModal && els.itemModal.style.display === "flex"){
+        closeRegularItemModal();
+        return true;
+      }
       if (els.opsTablesModal && els.opsTablesModal.style.display === "flex"){
         closeOpsTablesModal();
         return true;
@@ -3745,6 +4636,14 @@ function syncSubcatSelect(){
       }
       if (els.reportsModal && els.reportsModal.style.display === "flex"){
         closeReportsModal();
+        return true;
+      }
+      if (els.addonEditModal && els.addonEditModal.style.display === "flex"){
+        closeAddonEditModal();
+        return true;
+      }
+      if (els.addonModal && els.addonModal.style.display === "flex"){
+        closeAddonManager();
         return true;
       }
       if (els.systemModal && els.systemModal.style.display === "flex"){
@@ -4066,15 +4965,14 @@ function syncSubcatSelect(){
         }
 
         if (category === "pizzas"){
-          const p = parseNumberFlexible(get("precos > p"));
-          const m = parseNumberFlexible(get("precos > m"));
-          const g = parseNumberFlexible(get("precos > g"));
-          if (![p,m,g].every(v => Number.isFinite(v) && v >= 0)) continue;
+          const broto = parseNumberFlexible(get("precos > broto") || get("precos > p"));
+          const normal = parseNumberFlexible(get("precos > normal") || get("precos > m") || get("precos > g"));
+          if (![broto, normal].every(v => Number.isFinite(v) && v >= 0)) continue;
 
           imported.push({
             id: uid(),
             name, category, emoji, desc,
-            priceP: p, priceM: m, priceG: g,
+            priceP: broto, priceM: normal,
             isKitchen
           });
         } else {
@@ -4153,6 +5051,7 @@ function syncSubcatSelect(){
     ensureCategoriesFromProducts();
     renderCategorySelect();
     renderCategoryTabs();
+    refreshAddonManager();
     syncTabs();
     renderProducts();
     renderCart();
@@ -4161,6 +5060,8 @@ function syncSubcatSelect(){
     renderRole();
     updateBackupHint();
     scheduleAutoBackup();
+    lockSignaturePosition();
+    removeSignatureBackground();
     if (window.__MVS_DEMO_STORAGE) {
       toast("Modo demo em storage local ativo (sem SQLite).", "info", { timeout: 4800 });
     }

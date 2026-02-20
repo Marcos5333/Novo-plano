@@ -43,6 +43,9 @@
           <button class="btn slimBtn" type="button" id="manageCategoriesBtn" data-role-only="manager">
             <span class="icon">✏️</span>Editar Categorias
           </button>
+          <button class="btn slimBtn" type="button" id="addonManagerBtn">
+            <span class="icon">🧩</span>Acompanhamentos
+          </button>
           <button class="btn slimBtn" type="button" onclick="window.open('https://wa.me/5512933008987','_blank')">
             <span class="icon">📲</span>Suporte
           </button>
@@ -172,28 +175,22 @@
         <div id="pricePizzaBlock" style="display:none">
           <div class="formGrid">
             <div class="field">
-              <label>Preço P (R$)</label>
+              <label>Preço BROTO (R$)</label>
               <input id="pPriceP" placeholder="Ex: 39,90" inputmode="decimal" />
             </div>
             <div class="field">
-              <label>Preço M (R$)</label>
+              <label>Preço Normal (R$)</label>
               <input id="pPriceM" placeholder="Ex: 49,90" inputmode="decimal" />
             </div>
           </div>
-          <div class="formGrid">
-            <div class="field">
-              <label>Preço G (R$)</label>
-              <input id="pPriceG" placeholder="Ex: 59,90" inputmode="decimal" />
-            </div>
-            <div class="field">
-              <label>Vai para cozinha?</label>
-              <select id="pIsKitchenPizza">
-                <option value="1" selected>Sim</option>
-                <option value="0">Não</option>
-              </select>
-            </div>
+          <div class="field">
+            <label>Vai para cozinha?</label>
+            <select id="pIsKitchenPizza">
+              <option value="1" selected>Sim</option>
+              <option value="0">Não</option>
+            </select>
           </div>
-          <div class="hint">Pizzas usam preço por tamanho (P/M/G).</div>
+          <div class="hint">Pizzas usam preço por tamanho (BROTO/Normal).</div>
         </div>
 
         <div class="field" id="kitchenBlock">
@@ -215,7 +212,7 @@
     </div>
   </div>
 
-  <!-- MODAL: PIZZA PMG + MEIO A MEIO -->
+  <!-- MODAL: PIZZA BROTO/NORMAL + MEIO A MEIO -->
   <div class="modalOverlay" id="pizzaModal">
     <div class="modal" role="dialog" aria-modal="true">
       <div class="modalHeader">
@@ -227,9 +224,8 @@
         <div class="field">
           <label>Tamanho</label>
           <div class="seg" id="sizeSeg">
-            <button type="button" data-size="P">P</button>
-            <button type="button" data-size="M" class="active">M</button>
-            <button type="button" data-size="G">G</button>
+            <button type="button" data-size="BROTO">BROTO</button>
+            <button type="button" data-size="NORMAL" class="active">Normal</button>
           </div>
         </div>
 
@@ -250,6 +246,12 @@
             <label>Sabor 2 (se meio a meio)</label>
             <select id="flavor2"></select>
           </div>
+        </div>
+
+        <div class="field">
+          <label>Acompanhamento extra</label>
+          <select id="pizzaAddon"></select>
+          <div class="hint" id="pizzaAddonHint">Opcional. Soma no valor final da pizza.</div>
         </div>
 
         <div class="field">
@@ -441,31 +443,34 @@
           <div class="reportCard">
             <div>
               <div class="reportTitle">📅 Diário</div>
-              <div class="reportMeta">Vendas do dia selecionado.</div>
+              <div class="reportMeta">Somente vendas do dia + detalhado (cliente/produto/horário).</div>
             </div>
-            <button class="btn reportBtn" type="button" data-report="day">
-              <span class="icon">🖨️</span>Gerar
-            </button>
+            <div class="reportActions">
+              <button class="btn reportBtn reportBtnThin" type="button" data-report="day" data-mode="normal">Gerar normal</button>
+              <button class="btn reportBtn reportBtnThin" type="button" data-report="day" data-mode="detailed">Gerar detalhado</button>
+            </div>
           </div>
 
           <div class="reportCard">
             <div>
               <div class="reportTitle">🗓️ Mensal</div>
-              <div class="reportMeta">Vendas do mês da data selecionada.</div>
+              <div class="reportMeta">Vendas do mês + detalhado (cliente/produto/horário).</div>
             </div>
-            <button class="btn reportBtn" type="button" data-report="month">
-              <span class="icon">🖨️</span>Gerar
-            </button>
+            <div class="reportActions">
+              <button class="btn reportBtn reportBtnThin" type="button" data-report="month" data-mode="normal">Gerar normal</button>
+              <button class="btn reportBtn reportBtnThin" type="button" data-report="month" data-mode="detailed">Gerar detalhado</button>
+            </div>
           </div>
 
           <div class="reportCard">
             <div>
               <div class="reportTitle">📆 Anual</div>
-              <div class="reportMeta">Vendas do ano da data selecionada.</div>
+              <div class="reportMeta">Vendas do ano + detalhado (cliente/produto/horário).</div>
             </div>
-            <button class="btn reportBtn" type="button" data-report="year">
-              <span class="icon">🖨️</span>Gerar
-            </button>
+            <div class="reportActions">
+              <button class="btn reportBtn reportBtnThin" type="button" data-report="year" data-mode="normal">Gerar normal</button>
+              <button class="btn reportBtn reportBtnThin" type="button" data-report="year" data-mode="detailed">Gerar detalhado</button>
+            </div>
           </div>
 
           <div class="reportCard">
@@ -473,9 +478,10 @@
               <div class="reportTitle">🧾 Último fechamento</div>
               <div class="reportMeta">Reabre o relatório do último caixa fechado.</div>
             </div>
-            <button class="btn reportBtn" type="button" data-report="last">
-              <span class="icon">🖨️</span>Abrir
-            </button>
+            <div class="reportActions">
+              <button class="btn reportBtn reportBtnThin" type="button" data-report="last" data-mode="normal">Abrir normal</button>
+              <button class="btn reportBtn reportBtnThin" type="button" data-report="last" data-mode="detailed">Abrir detalhado</button>
+            </div>
           </div>
         </div>
       </div>
@@ -507,7 +513,7 @@
               <input id="managerNewPinInput" type="password" placeholder="Definir novo PIN" />
             </div>
             <button class="btnGhost" type="button" id="managerSetPinBtn" data-role-only="manager">Alterar PIN</button>
-            <div class="hint" id="roleHint">Dica: o PIN padrão é 1234 (troque no primeiro uso).</div>
+            <div class="hint">Dica: o PIN padrão é 1234 (troque no primeiro uso).</div>
           </div>
 
           <div class="sysCard compact">
@@ -568,7 +574,68 @@
             <div class="hint">Dica: clique em um item da cozinha para marcar como pronto.</div>
             <div class="hint">Dica: no Delivery, “Despachar” muda para “Finalizar”.</div>
           </div>
+
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ACOMPANHAMENTOS -->
+  <div class="modalOverlay" id="addonModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3>🧩 Acompanhamentos</h3>
+        <button class="closeX" type="button" id="addonClose">✖</button>
+      </div>
+
+      <div class="modalBody">
+        <div class="sysCard">
+          <div class="field">
+            <label>Categoria</label>
+            <select id="addonCategorySelect"></select>
+          </div>
+          <div class="field">
+            <label>Novo acompanhamento</label>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <input id="addonNameInput" data-role-only="manager" placeholder="Ex: Onion rings, molho verde..." />
+              <input id="addonPriceInput" data-role-only="manager" placeholder="Valor (R$) Ex: 2,50" inputmode="decimal" style="max-width:180px;" />
+              <button class="btnGhost" type="button" id="addonAddBtn" data-role-only="manager">Adicionar</button>
+            </div>
+          </div>
+          <div class="opsCard">
+            <div class="opsTitle">Lista da categoria</div>
+            <div id="addonList"></div>
+          </div>
+          <div class="hint">Dica: "Sem adicional" é fixo e sempre permanece.</div>
+        </div>
+      </div>
+
+      <div class="modalFooter">
+        <button class="btnGhost" type="button" id="addonCancel">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDITAR ACOMPANHAMENTO -->
+  <div class="modalOverlay" id="addonEditModal">
+    <div class="modal" role="dialog" aria-modal="true" style="width:min(460px, 100%);">
+      <div class="modalHeader">
+        <h3>✏️ Editar acompanhamento</h3>
+        <button class="closeX" type="button" id="addonEditClose">✖</button>
+      </div>
+      <div class="modalBody">
+        <div class="field">
+          <label>Nome</label>
+          <input id="addonEditNameInput" data-role-only="manager" placeholder="Nome do acompanhamento" />
+        </div>
+        <div class="field">
+          <label>Valor (R$)</label>
+          <input id="addonEditPriceInput" data-role-only="manager" placeholder="Ex: 2,50" inputmode="decimal" />
+        </div>
+      </div>
+      <div class="modalFooter">
+        <button class="btnGhost" type="button" id="addonEditCancel">Cancelar</button>
+        <button class="btn" type="button" id="addonEditSave" data-role-only="manager">Salvar</button>
       </div>
     </div>
   </div>
@@ -666,6 +733,42 @@
     </div>
   </div>
 
+  <!-- MODAL: ITEM PADRAO -->
+  <div class="modalOverlay" id="itemModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3 id="itemTitle">Ajustar Item</h3>
+        <button class="closeX" type="button" id="itemClose">✖</button>
+      </div>
+
+      <div class="modalBody">
+        <div class="field">
+          <label>Produto</label>
+          <input id="itemName" readonly />
+        </div>
+
+        <div class="field">
+          <label>Acompanhamento</label>
+          <select id="itemAddon"></select>
+          <div class="hint" id="itemAddonHint">Escolha conforme a categoria.</div>
+        </div>
+
+        <div class="field">
+          <label>Observação</label>
+          <input id="itemNotes" placeholder="Ex: sem cebola, sem molho..." />
+        </div>
+      </div>
+
+      <div class="modalFooter">
+        <button class="btnGhost" type="button" id="itemCancel">Fechar</button>
+        <button class="btnGhost" type="button" id="itemRemove">Remover -1</button>
+        <button class="btn" type="button" id="itemAdd">
+          <span class="icon">➕</span>Adicionar +1
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: CONFIRMAÇÃO -->
   <div class="modalOverlay" id="confirmModal">
     <div class="modal" role="dialog" aria-modal="true">
@@ -692,7 +795,7 @@
       </div>
       <div class="modalBody">
         <div class="catEditor" id="categoryList"></div>
-        <div class="formGrid" id="categoryAddBox">
+        <div class="formGrid">
           <div class="field">
             <label>Nova categoria</label>
             <input id="categoryAddName" placeholder="Ex: Lanches, Açaí" />
@@ -747,6 +850,17 @@
 
   <!-- TOASTS -->
   <div class="toastStack" id="toastStack" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Assinatura (desktop) -->
+  <img
+    id="signatureMark"
+    class="signatureMark"
+    src="assinatura.png"
+    style="position:fixed;right:10px;bottom:8px;left:auto;top:auto;"
+    alt=""
+    aria-hidden="true"
+    decoding="async"
+  />
 
   <script src="app.js" defer></script>
 
