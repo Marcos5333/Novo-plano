@@ -691,21 +691,35 @@ function syncSubcatSelect(){
       return String(raw || "").trim().replace(/\s+/g, " ");
     }
 
+    function addonCategoryVariants(category){
+      const key = String(category || "").trim().toLowerCase();
+      const variants = [];
+      if (key) variants.push(key);
+      if (key.endsWith("s")) variants.push(key.slice(0, -1));
+      if (key && !key.endsWith("s")) variants.push(`${key}s`);
+      if (key === "pizza") variants.push("pizzas");
+      if (key === "lanche") variants.push("lanches");
+      if (key === "bebida") variants.push("bebidas");
+      if (key === "sobremesa") variants.push("sobremesas");
+      if (key === "extra") variants.push("extras");
+      if (key === "açai") variants.push("acai");
+      if (key === "acai") variants.push("açai");
+      return Array.from(new Set(variants.filter(Boolean)));
+    }
+
+    function resolveAddonCategoryKey(category){
+      const variants = addonCategoryVariants(category);
+      for (const candidate of variants){
+        if (Array.isArray(categoryAddons?.[candidate])) return candidate;
+      }
+      return variants[0] || "_default";
+    }
+
     function defaultAddonPriceForCategory(categoryKey, addonName){
       const key = String(categoryKey || "_default").trim().toLowerCase();
       const name = normalizeAddonName(addonName).toLowerCase();
       if (!name) return 0;
-      const variants = new Set([key]);
-      if (key.endsWith("s")) variants.add(key.slice(0, -1));
-      if (key && !key.endsWith("s")) variants.add(`${key}s`);
-      if (key === "pizza") variants.add("pizzas");
-      if (key === "lanche") variants.add("lanches");
-      if (key === "bebida") variants.add("bebidas");
-      if (key === "sobremesa") variants.add("sobremesas");
-      if (key === "extra") variants.add("extras");
-      if (key === "açai") variants.add("acai");
-      if (key === "acai") variants.add("açai");
-
+      const variants = addonCategoryVariants(key);
       for (const candidate of variants){
         const source = Array.isArray(DEFAULT_CATEGORY_ADDONS[candidate]) ? DEFAULT_CATEGORY_ADDONS[candidate] : null;
         if (!source) continue;
@@ -815,18 +829,7 @@ function syncSubcatSelect(){
     let categoryAddons = loadCategoryAddons();
 
     function addonOptionsForCategory(category){
-      const key = String(category || "").trim().toLowerCase();
-      const variants = new Set([key]);
-      if (key.endsWith("s")) variants.add(key.slice(0, -1));
-      if (key && !key.endsWith("s")) variants.add(`${key}s`);
-      if (key === "pizza") variants.add("pizzas");
-      if (key === "lanche") variants.add("lanches");
-      if (key === "bebida") variants.add("bebidas");
-      if (key === "sobremesa") variants.add("sobremesas");
-      if (key === "extra") variants.add("extras");
-      if (key === "açai") variants.add("acai");
-      if (key === "acai") variants.add("açai");
-
+      const variants = addonCategoryVariants(category);
       for (const candidate of variants){
         const byCategory = categoryAddons[candidate];
         if (Array.isArray(byCategory) && byCategory.length) return byCategory;
@@ -844,13 +847,27 @@ function syncSubcatSelect(){
 
     function buildRegularItemNotes(addon, rawNote){
       const parts = [];
-      const addonName = normalizeAddonName(typeof addon === "string" ? addon : (addon?.name || ""));
-      const addonPriceRaw = typeof addon === "string" ? 0 : Number(addon?.price || 0);
-      const addonPrice = roundMoney(Math.max(0, addonPriceRaw));
       const noteTxt = String(rawNote || "").trim();
-      if (addonName && addonName.toLowerCase() !== "sem adicional"){
-        const addonLabel = addonOptionLabel({ name: addonName, price: addonPrice });
-        parts.push(`Acomp.: ${addonLabel}`);
+      if (Array.isArray(addon)){
+        const labels = addon
+          .map((entry) => {
+            const name = normalizeAddonName(entry?.name || "");
+            const price = roundMoney(Math.max(0, Number(entry?.price || 0)));
+            if (!name || name.toLowerCase() === "sem adicional") return "";
+            return addonOptionLabel({ name, price });
+          })
+          .filter(Boolean);
+        if (labels.length){
+          parts.push(`Acomp.: ${labels.join(", ")}`);
+        }
+      } else {
+        const addonName = normalizeAddonName(typeof addon === "string" ? addon : (addon?.name || ""));
+        const addonPriceRaw = typeof addon === "string" ? 0 : Number(addon?.price || 0);
+        const addonPrice = roundMoney(Math.max(0, addonPriceRaw));
+        if (addonName && addonName.toLowerCase() !== "sem adicional"){
+          const addonLabel = addonOptionLabel({ name: addonName, price: addonPrice });
+          parts.push(`Acomp.: ${addonLabel}`);
+        }
       }
       if (noteTxt){
         parts.push(noteTxt);

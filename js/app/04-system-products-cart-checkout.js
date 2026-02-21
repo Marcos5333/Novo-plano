@@ -253,7 +253,10 @@
       if (!requireManager()) return;
       if (!els.addonCategorySelect || !els.addonNameInput) return;
 
-      const categoryId = String(els.addonCategorySelect.value || "_default").trim().toLowerCase();
+      const selectedCategory = String(els.addonCategorySelect.value || "_default").trim().toLowerCase();
+      const categoryId = (typeof resolveAddonCategoryKey === "function")
+        ? resolveAddonCategoryKey(selectedCategory)
+        : selectedCategory;
       const name = normalizeAddonName(els.addonNameInput.value);
       const priceRaw = String(els.addonPriceInput?.value || "").trim();
       const priceParsed = priceRaw ? parseMoneyFlexible(priceRaw) : 0;
@@ -273,7 +276,7 @@
         return;
       }
 
-      const current = addonOptionsForCategory(categoryId).slice();
+      const current = addonOptionsForCategory(selectedCategory).slice();
       if (current.some((x) => String(x?.name || "").toLowerCase() === name.toLowerCase())){
         toast("Acompanhamento já existe nesta categoria.", "info");
         return;
@@ -289,15 +292,23 @@
       toast("Acompanhamento adicionado.", "success");
     }
 
-    function removeAddonFromEditor(nameRaw){
+    async function removeAddonFromEditor(nameRaw){
       if (!requireManager()) return;
       if (!els.addonCategorySelect) return;
 
-      const categoryId = String(els.addonCategorySelect.value || "_default").trim().toLowerCase();
+      const selectedCategory = String(els.addonCategorySelect.value || "_default").trim().toLowerCase();
+      const categoryId = (typeof resolveAddonCategoryKey === "function")
+        ? resolveAddonCategoryKey(selectedCategory)
+        : selectedCategory;
       const target = normalizeAddonName(nameRaw);
       if (!target) return;
+      const ok = await openConfirmModal({
+        title: "Excluir acompanhamento",
+        message: `Excluir "${target}" desta categoria?`
+      });
+      if (!ok) return;
 
-      const current = addonOptionsForCategory(categoryId)
+      const current = addonOptionsForCategory(selectedCategory)
         .filter((entry) => String(entry?.name || "").toLowerCase() !== target.toLowerCase());
       categoryAddons[categoryId] = current;
       saveCategoryAddons(categoryAddons);
@@ -363,11 +374,14 @@
       if (!requireManager()) return;
       if (!els.addonCategorySelect || !els.addonEditModal) return;
 
-      const categoryId = String(els.addonCategorySelect.value || "_default").trim().toLowerCase();
+      const selectedCategory = String(els.addonCategorySelect.value || "_default").trim().toLowerCase();
+      const categoryId = (typeof resolveAddonCategoryKey === "function")
+        ? resolveAddonCategoryKey(selectedCategory)
+        : selectedCategory;
       const currentName = normalizeAddonName(nameRaw);
       if (!currentName) return;
 
-      const current = addonOptionsForCategory(categoryId).slice();
+      const current = addonOptionsForCategory(selectedCategory).slice();
       const idx = current.findIndex((entry) => String(entry?.name || "").toLowerCase() === currentName.toLowerCase());
       if (idx < 0){
         toast("Acompanhamento não encontrado.", "error");
@@ -605,7 +619,7 @@
         saveAddonEditFromModal();
       }
     });
-    if (els.addonList) els.addonList.addEventListener("click", (e) => {
+    if (els.addonList) els.addonList.addEventListener("click", async (e) => {
       const btn = e.target.closest("button[data-action]");
       if (!btn) return;
       const action = btn.dataset.action;
@@ -615,7 +629,7 @@
         return;
       }
       if (action === "del-addon"){
-        removeAddonFromEditor(name);
+        await removeAddonFromEditor(name);
       }
     });
     if (els.diagRefreshBtn) els.diagRefreshBtn.addEventListener("click", loadDiagnostics);
@@ -1306,6 +1320,15 @@
       return true;
     }
 
+    function regularModalAddonOptions(product){
+      return addonOptionsForCategory(product?.category)
+        .map((entry) => ({
+          name: normalizeAddonName(entry?.name || ""),
+          price: roundMoney(Math.max(0, Number(entry?.price || 0))),
+        }))
+        .filter((entry) => entry.name && entry.name.toLowerCase() !== "sem adicional");
+    }
+
     function openRegularItemModal(product){
       if (!els.itemModal || !els.itemAddon || !els.itemName) {
         // fallback de segurança
@@ -1317,22 +1340,31 @@
       if (els.itemTitle) els.itemTitle.textContent = `Ajustar item`;
       els.itemName.value = product.name || "";
 
-      const options = addonOptionsForCategory(product.category);
-      els.itemAddon.innerHTML = options.map((opt, idx) => {
-        const label = addonOptionLabel(opt);
-        return `<option value="${idx}">${escapeHtml(label)}</option>`;
-      }).join("");
-      els.itemAddon.value = "0";
+      const options = regularModalAddonOptions(product);
+      if (!options.length){
+        els.itemAddon.innerHTML = `<div class="opsEmpty">Sem acompanhamentos extras nesta categoria.</div>`;
+      } else {
+        els.itemAddon.innerHTML = options.map((opt, idx) => (
+          `<label class="addonCheck">
+            <input type="checkbox" data-addon-idx="${idx}" />
+            <span>${escapeHtml(addonOptionLabel(opt))}</span>
+          </label>`
+        )).join("");
+      }
 
       if (els.itemAddonHint){
-        els.itemAddonHint.textContent = `Categoria: ${prettyCatLabel(product.category)}`;
+        els.itemAddonHint.textContent = `Categoria: ${prettyCatLabel(product.category)}. Marque quantos quiser.`;
       }
 
       if (els.itemNotes) els.itemNotes.value = "";
       if (els.itemRemove) els.itemRemove.disabled = !hasRegularItemInCart(product.id);
 
       els.itemModal.style.display = "flex";
-      setTimeout(() => els.itemAddon.focus(), 0);
+      setTimeout(() => {
+        const firstCheck = els.itemAddon.querySelector("input[type='checkbox']");
+        if (firstCheck) firstCheck.focus();
+        else els.itemNotes?.focus();
+      }, 0);
     }
 
     function closeRegularItemModal(){
@@ -1346,37 +1378,49 @@
       return products.find((p) => p.id === id) || null;
     }
 
-    function currentRegularAddonFromModal(){
+    function currentRegularAddonsFromModal(){
       const product = currentRegularItemFromModal();
-      if (!product) return { name: "Sem adicional", price: 0 };
-      const options = addonOptionsForCategory(product.category);
-      const idxRaw = Number.parseInt(String(els.itemAddon?.value || "0"), 10);
-      const idx = Number.isFinite(idxRaw) ? idxRaw : 0;
-      const chosen = options[idx] || options[0] || { name: "Sem adicional", price: 0 };
-      return {
-        name: normalizeAddonName(chosen?.name || "Sem adicional") || "Sem adicional",
-        price: roundMoney(Math.max(0, Number(chosen?.price || 0))),
-      };
+      if (!product || !els.itemAddon) return [];
+      const options = regularModalAddonOptions(product);
+      const checks = Array.from(els.itemAddon.querySelectorAll("input[type='checkbox'][data-addon-idx]:checked"));
+      const chosen = checks.map((input) => {
+        const idx = Number.parseInt(String(input.dataset.addonIdx || "-1"), 10);
+        if (!Number.isFinite(idx) || idx < 0) return null;
+        return options[idx] || null;
+      }).filter(Boolean);
+
+      const uniq = new Map();
+      for (const addon of chosen){
+        const key = `${addon.name}||${addon.price}`;
+        if (!uniq.has(key)) uniq.set(key, addon);
+      }
+      return Array.from(uniq.values());
+    }
+
+    function currentRegularAddonTotalFromModal(){
+      return roundMoney(currentRegularAddonsFromModal().reduce((acc, addon) => (
+        acc + roundMoney(Math.max(0, Number(addon?.price || 0)))
+      ), 0));
     }
 
     function currentRegularItemNotesFromModal(){
-      return buildRegularItemNotes(currentRegularAddonFromModal(), els.itemNotes?.value);
+      return buildRegularItemNotes(currentRegularAddonsFromModal(), els.itemNotes?.value);
     }
 
     if (els.itemAdd) els.itemAdd.addEventListener("click", () => {
       const product = currentRegularItemFromModal();
       if (!product) return;
-      const addon = currentRegularAddonFromModal();
+      const addonPrice = currentRegularAddonTotalFromModal();
       const notes = currentRegularItemNotesFromModal();
-      addRegularProductToCart(product, notes, addon.price);
+      addRegularProductToCart(product, notes, addonPrice);
       closeRegularItemModal();
     });
     if (els.itemRemove) els.itemRemove.addEventListener("click", () => {
       const product = currentRegularItemFromModal();
       if (!product) return;
-      const addon = currentRegularAddonFromModal();
+      const addonPrice = currentRegularAddonTotalFromModal();
       const notes = currentRegularItemNotesFromModal();
-      removeRegularProductFromCart(product, notes, addon.price);
+      removeRegularProductFromCart(product, notes, addonPrice);
       closeRegularItemModal();
     });
     if (els.itemClose) els.itemClose.addEventListener("click", closeRegularItemModal);

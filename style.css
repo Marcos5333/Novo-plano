@@ -838,7 +838,7 @@
     }
     .catRow{
       display:grid;
-      grid-template-columns: 38px 1fr 70px 86px;
+      grid-template-columns: 38px minmax(0, 1fr) 70px 86px;
       gap:8px;
       align-items:center;
       padding:8px;
@@ -856,10 +856,34 @@
     }
     .catRow input{
       width:100%;
+      min-width:0;
       padding:8px 10px;
       border-radius:10px;
       font-size:12px;
       font-weight:900;
+    }
+    .catRow .miniBtn{
+      min-width:0;
+    }
+    #categoryModal .modal{
+      width:min(860px, 100%);
+      max-width:calc(100vw - 16px);
+    }
+    #categoryModal .modalBody{
+      overflow-x:hidden;
+    }
+    #categoryModal .modalFooter{
+      display:grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap:8px;
+    }
+    #categoryModal .modalFooter .btn,
+    #categoryModal .modalFooter .btnGhost{
+      width:100%;
+      min-width:0;
+      justify-content:center;
+      text-align:center;
+      white-space:normal;
     }
     .emojiRow{
       display:flex;
@@ -893,6 +917,9 @@
         width:100%;
         justify-content:center;
       }
+      #categoryModal .modalFooter{
+        grid-template-columns: 1fr;
+      }
     }
 
     /* ===== Modais ===== */
@@ -913,6 +940,7 @@
     }
     .modal{
       width:min(720px, 100%);
+      max-width:calc(100vw - 16px);
       background: #ffffff;
       border: 1px solid rgba(226,232,240,.9);
       border-radius: 12px;
@@ -1046,8 +1074,14 @@
     .modalFooter{
       padding:14px 16px 16px 16px;
       display:flex;
+      flex-wrap:wrap;
       gap:10px;
       justify-content:flex-end;
+    }
+    .modalFooter .btn,
+    .modalFooter .btnGhost{
+      min-width:0;
+      max-width:100%;
     }
     .btnGhost{
       border:1px solid rgba(18,28,65,.16);
@@ -1094,6 +1128,36 @@
       font-size:12px;
       color: var(--muted);
       font-weight:900;
+    }
+    .addonCheckList{
+      display:grid;
+      gap:8px;
+      max-height:180px;
+      overflow:auto;
+      padding:10px;
+      border:1px solid rgba(18,28,65,.16);
+      border-radius:14px;
+      background:#fff;
+      box-shadow: 0 10px 18px rgba(0,0,0,.06);
+    }
+    .addonCheck{
+      display:flex;
+      align-items:flex-start;
+      gap:8px;
+      font-size:13px;
+      font-weight:900;
+      color:#1f2a44;
+    }
+    .addonCheck input[type="checkbox"]{
+      width:18px;
+      height:18px;
+      margin-top:1px;
+      padding:0;
+      border:0;
+      border-radius:0;
+      background:transparent;
+      accent-color:#0ea5e9;
+      box-shadow:none;
     }
     .paymentSplitSwitch{
       margin-top:2px;
