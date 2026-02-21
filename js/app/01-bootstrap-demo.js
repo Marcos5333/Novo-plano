@@ -209,9 +209,13 @@
       }
 
       function demoOrderTotal(db, orderId){
-        return db.order_items
+        const itemsTotal = db.order_items
           .filter((it) => Number(it.order_id) === Number(orderId))
           .reduce((acc, it) => acc + (Number(it.qty || 0) * Number(it.unit_price || 0)), 0);
+        const order = db.orders.find((o) => Number(o.id) === Number(orderId));
+        const discount = Number(order?.discount || 0);
+        const fee = Number(order?.fee || 0);
+        return roundMoney(Math.max(0, itemsTotal - discount + fee));
       }
 
       function demoDayKeyFromIso(iso){
@@ -1158,6 +1162,103 @@ ${bodyHtml}
           return demoJson({ ok: true, rows });
         }
 
+        if (method === "GET" && path === "/api/receivables/open"){
+          const rows = db.orders
+            .filter((o) => String(o.order_type || "") === "a_receber" && String(o.status || "").toUpperCase() === "ABERTO")
+            .map((o) => ({
+              id: Number(o.id),
+              order_number: Number(o.order_number || 0),
+              created_at: o.created_at || demoNowIso(),
+              customer_name: String(o.customer_name || ""),
+              customer_phone: String(o.customer_phone || ""),
+              total: demoOrderTotal(db, o.id),
+              order_count: Number(o.merged_count || 1),
+              itemsSummary: (() => {
+                const items = db.order_items.filter((it) => Number(it.order_id) === Number(o.id));
+                const map = new Map();
+                for (const it of items){
+                  const key = `${it.name}||${it.notes || ""}`;
+                  const cur = map.get(key) || { name: String(it.name || "Item"), qty: 0, notes: String(it.notes || "") };
+                  cur.qty += Number(it.qty || 1);
+                  map.set(key, cur);
+                }
+                return Array.from(map.values());
+              })()
+            }))
+            .sort((a, b) => b.id - a.id);
+          return demoJson({ ok: true, rows });
+        }
+
+        if (method === "POST" && path === "/api/receivables/open"){
+          const payload = demoParseJsonBody(init);
+          const customerName = String(payload?.customer_name || "").trim();
+          if (!customerName) return demoError("Informe o nome do cliente", 400);
+
+          const normalized = customerName.toLocaleLowerCase("pt-BR");
+          const existing = db.orders.find((o) =>
+            String(o.order_type || "") === "a_receber" &&
+            String(o.status || "").toUpperCase() === "ABERTO" &&
+            String(o.customer_name || "").trim().toLocaleLowerCase("pt-BR") === normalized
+          );
+          if (existing){
+            return demoJson({
+              ok: true,
+              existing: true,
+              row: {
+                id: Number(existing.id),
+                order_number: Number(existing.order_number || 0),
+                created_at: existing.created_at || demoNowIso(),
+                customer_name: String(existing.customer_name || ""),
+                customer_phone: String(existing.customer_phone || ""),
+                total: demoOrderTotal(db, existing.id),
+                order_count: Number(existing.merged_count || 1),
+              }
+            });
+          }
+
+          const now = demoNowIso();
+          const orderId = db.seq.order++;
+          const orderNumber = Number(db.meta.last_order_number || 0) + 1;
+          db.meta.last_order_number = orderNumber;
+
+          const order = {
+            id: orderId,
+            order_number: orderNumber,
+            created_at: now,
+            order_type: "a_receber",
+            table_no: "",
+            customer_name: customerName,
+            customer_phone: "",
+            address: "",
+            notes: "",
+            payment_method: "",
+            payment_splits: [],
+            delivery_status: "",
+            status: "ABERTO",
+            merged_count: 1,
+            subtotal: 0,
+            discount: 0,
+            fee: 0,
+            total: 0
+          };
+          db.orders.push(order);
+          demoSaveDb(db);
+
+          return demoJson({
+            ok: true,
+            existing: false,
+            row: {
+              id: Number(order.id),
+              order_number: Number(order.order_number || 0),
+              created_at: order.created_at || demoNowIso(),
+              customer_name: String(order.customer_name || ""),
+              customer_phone: String(order.customer_phone || ""),
+              total: 0,
+              order_count: 1,
+            }
+          });
+        }
+
         if (method === "GET" && path === "/api/kitchen/pending"){
           const orderById = new Map(db.orders.map((o) => [Number(o.id), o]));
           const rows = db.order_items
@@ -1338,8 +1439,10 @@ ${bodyHtml}
 
           const now = demoNowIso();
           const orderType = String(payload.order_type || "retirada");
-          const orderStatus = orderType === "mesa" ? "ABERTO" : "FECHADO";
+          const orderStatus = (orderType === "mesa" || orderType === "a_receber") ? "ABERTO" : "FECHADO";
           const tableNo = String(payload.table_no || "").trim();
+          const receivableId = Number(payload?.receivable_id || 0);
+          const receivableName = String(payload?.customer_name || "").trim();
           let orderId = null;
           let orderNumber = null;
           let existing = null;
@@ -1351,17 +1454,40 @@ ${bodyHtml}
               String(o.table_no || "").trim() === tableNo
             );
           }
+          if (orderType === "a_receber"){
+            if (Number.isFinite(receivableId) && receivableId > 0){
+              existing = db.orders.find((o) =>
+                Number(o.id) === receivableId &&
+                String(o.order_type || "") === "a_receber" &&
+                String(o.status || "").toUpperCase() === "ABERTO"
+              );
+            }
+            if (!existing && receivableName){
+              const normalized = receivableName.toLocaleLowerCase("pt-BR");
+              existing = db.orders.find((o) =>
+                String(o.order_type || "") === "a_receber" &&
+                String(o.status || "").toUpperCase() === "ABERTO" &&
+                String(o.customer_name || "").trim().toLocaleLowerCase("pt-BR") === normalized
+              );
+            }
+          }
 
           if (existing){
             orderId = Number(existing.id);
             orderNumber = Number(existing.order_number || 0);
             existing.merged_count = Number(existing.merged_count || 1) + 1;
             const newName = String(payload.customer_name || "").trim();
-            if (newName){
+            if (newName && orderType === "a_receber"){
+              existing.customer_name = newName;
+            } else if (newName){
               const currentNames = String(existing.customer_name || "").split("/").map(s => s.trim()).filter(Boolean);
               if (!currentNames.includes(newName)){
                 existing.customer_name = currentNames.length ? `${currentNames.join(" / ")} / ${newName}` : newName;
               }
+            }
+            if (orderType === "a_receber"){
+              const newPhone = String(payload.customer_phone || "").trim();
+              if (newPhone) existing.customer_phone = newPhone;
             }
             existing.subtotal = Number(existing.subtotal || 0) + Number(payload?.totals?.subtotal || 0);
             existing.discount = Number(existing.discount || 0) + Number(payload?.totals?.discount || 0);
@@ -1372,6 +1498,9 @@ ${bodyHtml}
               existing.notes = String(existing.notes || "") + sep + String(payload.notes || "");
             }
           } else {
+            if (orderType === "a_receber" && !receivableName){
+              return demoError("Informe o cliente para lançar no fiado", 400);
+            }
             orderId = db.seq.order++;
             orderNumber = Number(db.meta.last_order_number || 0) + 1;
             db.meta.last_order_number = orderNumber;

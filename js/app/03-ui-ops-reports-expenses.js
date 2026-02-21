@@ -193,7 +193,10 @@
       checkoutCancel: document.getElementById("checkoutCancel"),
       checkoutConfirm: document.getElementById("checkoutConfirm"),
       orderType: document.getElementById("orderType"),
+      tableNoField: document.getElementById("tableNoField"),
       tableNo: document.getElementById("tableNo"),
+      deliveryFeeField: document.getElementById("deliveryFeeField"),
+      deliveryFee: document.getElementById("deliveryFee"),
       custName: document.getElementById("custName"),
       custPhone: document.getElementById("custPhone"),
       custAddress: document.getElementById("custAddress"),
@@ -213,6 +216,7 @@
       opsTablesBtn: document.getElementById("opsTablesBtn"),
       opsKitchenBtn: document.getElementById("opsKitchenBtn"),
       deliveryBtn: document.getElementById("deliveryBtn"),
+      receivableBtn: document.getElementById("receivableBtn"),
       opsTablesModal: document.getElementById("opsTablesModal"),
       opsKitchenModal: document.getElementById("opsKitchenModal"),
       opsTablesClose: document.getElementById("opsTablesClose"),
@@ -223,6 +227,11 @@
       deliveryClose: document.getElementById("deliveryClose"),
       deliveryRefresh: document.getElementById("deliveryRefresh"),
       deliveryList: document.getElementById("deliveryList"),
+      receivableModal: document.getElementById("receivableModal"),
+      receivableClose: document.getElementById("receivableClose"),
+      receivableRefresh: document.getElementById("receivableRefresh"),
+      receivableNewBtn: document.getElementById("receivableNewBtn"),
+      receivableList: document.getElementById("receivableList"),
       opsTables: document.getElementById("opsTables"),
       opsKitchen: document.getElementById("opsKitchen"),
 
@@ -246,6 +255,7 @@
     let editingProductId = null;
     let closingTableId = null;
     let closingTableIds = null;
+    let activeReceivableId = null;
     let paymentSplits = [];
     let launchRowsIndex = new Map();
     let expensesPoll = null;
@@ -286,8 +296,12 @@
     let deliveryPoll = null;
 
     function prettyType(t){
-      const v = String(t || "");
-      return v ? (v.charAt(0).toUpperCase() + v.slice(1)) : "-";
+      const raw = String(t || "").trim();
+      if (!raw) return "-";
+      return raw
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .replace(/\b\w/g, (m) => m.toUpperCase());
     }
 
     function fmtDateTime(iso){
@@ -483,13 +497,157 @@
       }
     }
 
-    async function loadTableToCart(orderIds){
+    function renderReceivables(rows){
+      if (!els.receivableList) return;
+      if (!rows || rows.length === 0){
+        els.receivableList.innerHTML = `<div class="opsEmpty">Nenhuma conta a receber em aberto</div>`;
+        return;
+      }
+
+      els.receivableList.innerHTML = rows.map((r) => {
+        const total = brl(Number(r.total || 0));
+        const orderCount = Math.max(1, Number(r.order_count || 1));
+        const itemRows = Array.isArray(r.itemsSummary) ? r.itemsSummary : [];
+        const itemCount = itemRows.reduce((acc, it) => acc + Number(it.qty || 0), 0);
+        const countText = itemCount === 1 ? "1 item" : `${itemCount} itens`;
+        const orderText = orderCount === 1 ? "1 lançamento" : `${orderCount} lançamentos`;
+        const customer = String(r.customer_name || "").trim() || "Cliente sem nome";
+        const toggleId = `recv-items-${Number(r.id || 0)}`;
+        const itemsHtml = itemRows.length
+          ? `<div class="opsItems" id="${escapeHtml(toggleId)}" style="display:none">${itemRows.map((it) => {
+              const notes = String(it.notes || "").trim();
+              return `<div class="opsMeta">• ${escapeHtml(`${it.qty}x ${it.name}`)}${notes ? ` (${escapeHtml(notes)})` : ""}</div>`;
+            }).join("")}</div>`
+          : `<div class="opsMeta">Sem itens lançados ainda</div>`;
+
+        return `
+          <article class="opsItem receivableCard">
+            <div class="receivableHead">
+              <div class="receivableName">${escapeHtml(customer)}</div>
+              <div class="receivableTotal">${escapeHtml(total)}</div>
+            </div>
+            <div class="receivableStatus">Em aberto</div>
+            <div class="opsMeta">${escapeHtml(orderText)} • ${escapeHtml(countText)}</div>
+            <div class="opsMeta">${escapeHtml(fmtDateTime(r.created_at))}</div>
+            <div class="receivableActions">
+              <button class="miniBtn" type="button" data-action="toggle-items" data-target="${escapeHtml(toggleId)}">Ver itens</button>
+              <button class="miniBtn" type="button" data-action="add-receivable-items" data-id="${escapeHtml(String(r.id))}">Adicionar itens</button>
+              <button class="miniBtn wide" type="button" data-action="close-receivable" data-id="${escapeHtml(String(r.id))}">Fechar no carrinho</button>
+            </div>
+            ${itemsHtml}
+          </article>
+        `;
+      }).join("");
+    }
+
+    async function loadReceivablesData(){
+      if (!els.receivableList) return;
+      try{
+        setButtonLoading(els.receivableRefresh, true);
+        const resp = await fetch("/api/receivables/open");
+        const data = await resp.json().catch(() => null);
+        if (!resp.ok || data?.ok === false) throw new Error(data?.error || "Erro ao carregar contas");
+        renderReceivables(data?.rows || []);
+      } catch (e){
+        els.receivableList.innerHTML = `<div class="opsEmpty">Falha ao carregar contas a receber</div>`;
+        logError("Falha ao carregar contas a receber", e);
+      } finally {
+        setButtonLoading(els.receivableRefresh, false);
+      }
+    }
+
+    async function createReceivableAccount(){
+      const raw = await openPromptModal({
+        title: "Cadastrar cliente no fiado",
+        message: "Informe o nome do cliente para abrir uma conta a receber.",
+        label: "Cliente",
+        placeholder: "Ex: Joao da Silva",
+        confirmText: "Cadastrar",
+        cancelText: "Cancelar",
+      });
+      if (raw === null) return;
+
+      const name = String(raw || "").trim();
+      if (!name){
+        toast("Informe o nome do cliente.", "error");
+        return;
+      }
+
+      try{
+        setButtonLoading(els.receivableNewBtn, true);
+        const resp = await fetch("/api/receivables/open", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({ customer_name: name })
+        });
+        const data = await resp.json().catch(() => null);
+        if (!resp.ok || data?.ok === false) throw new Error(data?.error || "Falha ao cadastrar cliente");
+        await loadReceivablesData();
+        if (data?.existing){
+          toast("Cliente já tinha conta em aberto. Use 'Adicionar itens'.", "info");
+        } else {
+          toast("Conta a receber criada.", "success");
+        }
+      } catch (e){
+        toast("Falha ao cadastrar cliente: " + e.message, "error", { detail: e?.stack || e?.message });
+      } finally {
+        setButtonLoading(els.receivableNewBtn, false);
+      }
+    }
+
+    async function prepareReceivableForItems(orderId){
+      const id = Number(orderId || 0);
+      if (!Number.isFinite(id) || id <= 0) return;
+
+      try{
+        const resp = await fetch(`/api/orders/${id}`);
+        const data = await resp.json().catch(() => null);
+        if (!resp.ok || data?.ok === false) throw new Error(data?.error || "Conta não encontrada");
+        const order = data?.order || {};
+
+        if (cart.size > 0){
+          const ok = await openConfirmModal({
+            title: "Trocar lançamento",
+            message: "Limpar carrinho atual para lançar itens nesta conta a receber?"
+          });
+          if (!ok) return;
+          cart.clear();
+          renderCart();
+        }
+
+        closingTableId = null;
+        closingTableIds = null;
+        activeReceivableId = id;
+        els.orderType.value = "a_receber";
+        els.tableNo.value = "";
+        if (els.deliveryFee) els.deliveryFee.value = "";
+        els.custName.value = order.customer_name || "";
+        els.custPhone.value = order.customer_phone || "";
+        els.custAddress.value = "";
+        els.orderNotes.value = "";
+
+        els.orderType.dispatchEvent(new Event("change"));
+        updatePaymentVisibility();
+        closeReceivableModal();
+
+        const customerName = String(order.customer_name || "").trim() || "cliente";
+        toast(`Conta de ${customerName} selecionada. Adicione itens e finalize.`, "success");
+      } catch (e){
+        toast("Falha ao preparar conta: " + e.message, "error", { detail: e?.stack || e?.message });
+      }
+    }
+
+    async function loadTableToCart(orderIds, opts = {}){
       const ids = Array.isArray(orderIds) ? orderIds : [orderIds];
+      const closeModal = typeof opts.closeModal === "function" ? opts.closeModal : closeOpsTablesModal;
+      const successMessage = String(opts.successMessage || "Pedido carregado no carrinho. Finalize o pagamento.");
+      const errorMessage = String(opts.errorMessage || "Falha ao carregar pedido: ");
+
       try{
         const results = await Promise.all(ids.map(async (id) => {
           const resp = await fetch(`/api/orders/${id}`);
           const data = await resp.json().catch(() => null);
-          if (!resp.ok || data?.ok === false) throw new Error(data?.error || "Erro ao carregar mesa");
+          if (!resp.ok || data?.ok === false) throw new Error(data?.error || "Erro ao carregar pedido");
           return data;
         }));
 
@@ -519,18 +677,29 @@
           }
         }
 
+        if (merged.size === 0){
+          toast("Este pedido não possui itens no momento.", "info");
+          return;
+        }
+
         cart.clear();
         let idx = 0;
         for (const it of merged.values()){
           cart.set(`merge|${idx++}`, it);
         }
-
         renderCart();
 
         closingTableIds = ids.map(Number).filter(v => Number.isFinite(v));
         closingTableId = closingTableIds[closingTableIds.length - 1] || null;
+        activeReceivableId = null;
         els.orderType.value = baseOrder?.order_type || "mesa";
         els.tableNo.value = baseOrder?.table_no || "";
+        if (els.deliveryFee){
+          const loadedFee = Number(baseOrder?.fee || 0);
+          els.deliveryFee.value = (Number.isFinite(loadedFee) && loadedFee > 0)
+            ? roundMoney(loadedFee).toFixed(2).replace(".", ",")
+            : "";
+        }
         els.custName.value = baseOrder?.customer_name || "";
         els.custPhone.value = baseOrder?.customer_phone || "";
         els.custAddress.value = baseOrder?.address || "";
@@ -539,33 +708,50 @@
         els.orderType.dispatchEvent(new Event("change"));
         updatePaymentVisibility();
 
-        closeOpsTablesModal();
-        toast("Mesa carregada no carrinho. Finalize o pagamento.", "success");
+        closeModal();
+        toast(successMessage, "success");
       } catch (e){
-        toast("Falha ao carregar mesa: " + e.message, "error", { detail: e?.stack || e?.message });
+        toast(errorMessage + e.message, "error", { detail: e?.stack || e?.message });
       }
     }
 
     function opsAnyOpen(){
       return (els.opsTablesModal && els.opsTablesModal.style.display === "flex")
         || (els.opsKitchenModal && els.opsKitchenModal.style.display === "flex")
-        || (els.deliveryModal && els.deliveryModal.style.display === "flex");
+        || (els.receivableModal && els.receivableModal.style.display === "flex");
+    }
+
+    function pollOpsViews(){
+      const opsOpen = (els.opsTablesModal && els.opsTablesModal.style.display === "flex")
+        || (els.opsKitchenModal && els.opsKitchenModal.style.display === "flex");
+      if (opsOpen) loadOpsData();
+      if (els.receivableModal && els.receivableModal.style.display === "flex") loadReceivablesData();
+    }
+
+    function startOpsPolling(){
+      if (opsPoll) clearInterval(opsPoll);
+      opsPoll = setInterval(pollOpsViews, 8000);
     }
 
     function openOpsTablesModal(){
       if (!els.opsTablesModal) return;
       els.opsTablesModal.style.display = "flex";
       loadOpsData();
-      if (opsPoll) clearInterval(opsPoll);
-      opsPoll = setInterval(loadOpsData, 8000);
+      startOpsPolling();
     }
 
     function openOpsKitchenModal(){
       if (!els.opsKitchenModal) return;
       els.opsKitchenModal.style.display = "flex";
       loadOpsData();
-      if (opsPoll) clearInterval(opsPoll);
-      opsPoll = setInterval(loadOpsData, 8000);
+      startOpsPolling();
+    }
+
+    function openReceivableModal(){
+      if (!els.receivableModal) return;
+      els.receivableModal.style.display = "flex";
+      loadReceivablesData();
+      startOpsPolling();
     }
 
     function closeOpsTablesModal(){
@@ -575,6 +761,11 @@
 
     function closeOpsKitchenModal(){
       if (els.opsKitchenModal) els.opsKitchenModal.style.display = "none";
+      if (!opsAnyOpen() && opsPoll) { clearInterval(opsPoll); opsPoll = null; }
+    }
+
+    function closeReceivableModal(){
+      if (els.receivableModal) els.receivableModal.style.display = "none";
       if (!opsAnyOpen() && opsPoll) { clearInterval(opsPoll); opsPoll = null; }
     }
 
@@ -593,18 +784,23 @@
 
     if (els.opsTablesBtn) els.opsTablesBtn.addEventListener("click", openOpsTablesModal);
     if (els.opsKitchenBtn) els.opsKitchenBtn.addEventListener("click", openOpsKitchenModal);
+    if (els.receivableBtn) els.receivableBtn.addEventListener("click", openReceivableModal);
     if (els.deliveryBtn) els.deliveryBtn.addEventListener("click", openDeliveryModal);
     if (els.opsTablesClose) els.opsTablesClose.addEventListener("click", closeOpsTablesModal);
     if (els.opsKitchenClose) els.opsKitchenClose.addEventListener("click", closeOpsKitchenModal);
+    if (els.receivableClose) els.receivableClose.addEventListener("click", closeReceivableModal);
     if (els.opsTablesRefresh) els.opsTablesRefresh.addEventListener("click", loadOpsData);
     if (els.opsKitchenRefresh) els.opsKitchenRefresh.addEventListener("click", loadOpsData);
+    if (els.receivableRefresh) els.receivableRefresh.addEventListener("click", loadReceivablesData);
     if (els.opsTablesModal) els.opsTablesModal.addEventListener("click", (e) => { if (e.target === els.opsTablesModal) closeOpsTablesModal(); });
     if (els.opsKitchenModal) els.opsKitchenModal.addEventListener("click", (e) => { if (e.target === els.opsKitchenModal) closeOpsKitchenModal(); });
+    if (els.receivableModal) els.receivableModal.addEventListener("click", (e) => { if (e.target === els.receivableModal) closeReceivableModal(); });
     if (els.deliveryClose) els.deliveryClose.addEventListener("click", closeDeliveryModal);
     if (els.deliveryRefresh) els.deliveryRefresh.addEventListener("click", loadDeliveryData);
     if (els.deliveryModal) els.deliveryModal.addEventListener("click", (e) => { if (e.target === els.deliveryModal) closeDeliveryModal(); });
+    if (els.receivableNewBtn) els.receivableNewBtn.addEventListener("click", createReceivableAccount);
 
-    els.opsTables.addEventListener("click", async (e) => {
+    if (els.opsTables) els.opsTables.addEventListener("click", async (e) => {
       const btn = e.target.closest("button[data-action]");
       if (!btn) return;
       const action = btn.dataset.action;
@@ -628,14 +824,18 @@
         if (!ok) return;
         setButtonLoading(btn, true);
         try{
-          await loadTableToCart(ids);
+          await loadTableToCart(ids, {
+            closeModal: closeOpsTablesModal,
+            successMessage: "Mesa carregada no carrinho. Finalize o pagamento.",
+            errorMessage: "Falha ao carregar mesa: "
+          });
         } finally {
           setButtonLoading(btn, false);
         }
       }
     });
 
-    els.opsKitchen.addEventListener("click", async (e) => {
+    if (els.opsKitchen) els.opsKitchen.addEventListener("click", async (e) => {
       const btn = e.target.closest("button[data-action='ready-item']");
       if (!btn) return;
       const id = btn.dataset.id;
@@ -649,6 +849,53 @@
         toast("Falha ao marcar pronto: " + err.message, "error", { detail: err?.stack || err?.message });
       } finally {
         setButtonLoading(btn, false);
+      }
+    });
+
+    if (els.receivableList) els.receivableList.addEventListener("click", async (e) => {
+      const btn = e.target.closest("button[data-action]");
+      if (!btn) return;
+      const action = String(btn.dataset.action || "");
+      if (action === "toggle-items"){
+        const targetId = btn.dataset.target;
+        if (!targetId) return;
+        const el = document.getElementById(targetId);
+        if (!el) return;
+        const visible = el.style.display !== "none";
+        el.style.display = visible ? "none" : "grid";
+        btn.textContent = visible ? "Ver itens" : "Ocultar itens";
+        return;
+      }
+
+      const id = Number(btn.dataset.id || 0);
+      if (!Number.isFinite(id) || id <= 0) return;
+
+      if (action === "add-receivable-items"){
+        setButtonLoading(btn, true);
+        try{
+          await prepareReceivableForItems(id);
+        } finally {
+          setButtonLoading(btn, false);
+        }
+        return;
+      }
+
+      if (action === "close-receivable"){
+        const ok = await openConfirmModal({
+          title: "Fechar conta a receber",
+          message: "Carregar esta conta no carrinho para fechar com pagamento?"
+        });
+        if (!ok) return;
+        setButtonLoading(btn, true);
+        try{
+          await loadTableToCart([id], {
+            closeModal: closeReceivableModal,
+            successMessage: "Conta carregada no carrinho. Finalize o pagamento.",
+            errorMessage: "Falha ao carregar conta: "
+          });
+        } finally {
+          setButtonLoading(btn, false);
+        }
       }
     });
 

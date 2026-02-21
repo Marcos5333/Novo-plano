@@ -14,7 +14,7 @@
       <div class="brand">
         <div class="logoImg" aria-hidden="true">MVS</div>
         <div>
-          <h1>MVS TECHSOLUTION</h1>
+          <h1>MVS TECHSOLUTION <br> B10 Lanches</h1>
           
         </div>
       </div>
@@ -24,6 +24,7 @@
           <button class="pill" type="button" id="opsTablesBtn">🍽️ Mesas</button>
           <button class="pill" type="button" id="opsKitchenBtn">👨‍🍳 Cozinha</button>
           <button class="pill" type="button" id="deliveryBtn">🛵 Delivery</button>
+          <button class="pill" type="button" id="receivableBtn">📒 A receber</button>
           <button class="pill" type="button" id="reportsBtn" data-role-only="manager">📊 Relatórios</button>
           <button class="pill" type="button" id="expensesBtn" data-role-only="manager">💸 Despesas</button>
           <div class="pill" id="cashPill" title="Clique para abrir/fechar o caixa" data-role-only="manager">
@@ -294,11 +295,16 @@
               <option value="entrega" selected>Entrega</option>
               <option value="retirada">Retirada</option>
               <option value="mesa">Mesa</option>
+              <option value="a_receber">A receber</option>
             </select>
           </div>
-          <div class="field">
+          <div class="field" id="tableNoField">
             <label>Mesa (se for mesa)</label>
             <input id="tableNo" placeholder="Ex: 04" />
+          </div>
+          <div class="field" id="deliveryFeeField" style="display:none">
+            <label>Taxa de entrega</label>
+            <input id="deliveryFee" placeholder="Ex: 5,00" inputmode="decimal" />
           </div>
         </div>
 
@@ -487,6 +493,31 @@
             </div>
           </div>
 
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: A RECEBER -->
+  <div class="modalOverlay" id="receivableModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3>A receber • Fiado</h3>
+        <div style="display:flex; gap:8px; align-items:center">
+          <button class="btnGhost" type="button" id="receivableRefresh">Atualizar</button>
+          <button class="closeX" type="button" id="receivableClose">✖</button>
+        </div>
+      </div>
+
+      <div class="modalBody">
+        <div class="opsCard">
+          <div class="receivableToolbar">
+            <div class="opsTitle">Contas em aberto</div>
+            <button class="btn" type="button" id="receivableNewBtn">
+              <span class="icon">➕</span>Cadastrar cliente
+            </button>
+          </div>
+          <div id="receivableList"></div>
         </div>
       </div>
     </div>
@@ -787,6 +818,7 @@
                 <option value="entrega">Entrega</option>
                 <option value="retirada">Retirada</option>
                 <option value="mesa">Mesa</option>
+                <option value="a_receber">A receber</option>
               </select>
             </div>
             <div class="field">

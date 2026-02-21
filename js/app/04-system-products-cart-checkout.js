@@ -757,14 +757,22 @@
       renderTotals();
     }
 
+    function parseCurrentDeliveryFee(){
+      const fee = parsePaymentAmountInput(els.deliveryFee?.value || "");
+      if (!Number.isFinite(fee) || fee < 0) return 0;
+      return roundMoney(fee);
+    }
+
+    function currentCheckoutFee(){
+      const type = String(els.orderType?.value || "");
+      const appliesFee = type === "entrega" || type === "a_receber";
+      return appliesFee
+        ? parseCurrentDeliveryFee()
+        : 0;
+    }
+
     function renderTotals(){
-      let subtotal = 0;
-      for (const it of cart.values()){
-        subtotal += it.unit_price * it.qty;
-      }
-      const discount = 0;
-      const fee = 0;
-      const total = Math.max(0, subtotal - discount + fee);
+      const { subtotal, discount, fee, total } = calcTotals();
 
       els.subtotal.textContent = brl(subtotal);
       els.discount.textContent = brl(discount);
@@ -775,7 +783,7 @@
     // ===== Carrinho +/− =====
     els.cartItems.addEventListener("click", (e) => {
       if (closingTableId){
-        toast("Mesa em fechamento. Para alterar itens, cancele o fechamento e abra uma nova venda.", "info");
+        toast("Fechamento em andamento. Para alterar itens, cancele o fechamento e abra uma nova venda.", "info");
         return;
       }
       const b = e.target.closest("button[data-action]");
@@ -798,16 +806,19 @@
       if (closingTableId){
         const ok = await openConfirmModal({
           title: "Limpar carrinho",
-          message: "Cancelar fechamento da mesa e limpar carrinho?"
+          message: "Cancelar fechamento atual e limpar carrinho?"
         });
         if (!ok) return;
         closingTableId = null;
         closingTableIds = null;
+        activeReceivableId = null;
         updatePaymentVisibility();
       }
       cart.clear();
+      if (els.deliveryFee) els.deliveryFee.value = "";
       renderCart();
       resetPaymentSplitState(0);
+      activeReceivableId = null;
       updatePaymentVisibility();
     });
 
@@ -1389,7 +1400,7 @@
 
       if (action === "add"){
         if (closingTableId){
-          toast("Finalize a mesa antes de adicionar itens.", "info");
+          toast("Finalize o fechamento atual antes de adicionar itens.", "info");
           return;
         }
         if (p.category === "pizzas"){
@@ -1433,9 +1444,13 @@
       return roundMoney(value).toFixed(2).replace(".", ",");
     }
 
+    const PAYMENT_METHOD_VALUES = Object.freeze(["dinheiro", "pix", "debito", "credito"]);
+    const PAYMENT_METHOD_SET = new Set(PAYMENT_METHOD_VALUES);
+
     function buildPaymentMethodOptions(selected){
-      return Object.entries(PAYMENT_METHOD_LABELS)
-        .map(([value, label]) => {
+      return PAYMENT_METHOD_VALUES
+        .map((value) => {
+          const label = paymentMethodLabel(value);
           const sel = value === selected ? " selected" : "";
           return `<option value="${escapeAttr(value)}"${sel}>${escapeHtml(label)}</option>`;
         })
@@ -1531,7 +1546,7 @@
     function seedPaymentSplits(totalTarget, peopleCount = syncSplitPeopleInput()){
       const count = Math.max(2, Number(peopleCount || 2));
       const preferred = String(els.paymentMethod?.value || "dinheiro").toLowerCase();
-      const method = PAYMENT_METHOD_LABELS[preferred] ? preferred : "dinheiro";
+      const method = PAYMENT_METHOD_SET.has(preferred) ? preferred : "dinheiro";
       const amounts = splitTotalEvenly(totalTarget, count);
       paymentSplits = amounts.map((amount, idx) => ({
         id: uid(),
@@ -1581,7 +1596,7 @@
       const normalized = paymentSplits.map((split, idx) => {
         const person = String(split.person_name || "").trim() || `Pessoa ${idx + 1}`;
         const method = String(split.method || "").trim().toLowerCase();
-        if (!PAYMENT_METHOD_LABELS[method]){
+        if (!PAYMENT_METHOD_SET.has(method)){
           throw new Error(`Informe a forma de pagamento de ${person}`);
         }
         const amount = parsePaymentAmountInput(split.amount);
@@ -1622,7 +1637,7 @@
       let subtotal = 0;
       for (const it of cart.values()) subtotal += it.unit_price * it.qty;
       const discount = 0;
-      const fee = 0;
+      const fee = currentCheckoutFee();
       const total = Math.max(0, subtotal - discount + fee);
       return { subtotal, discount, fee, total };
     }
@@ -1630,7 +1645,7 @@
     function unlockCheckoutFields(){
       const fields = [
         els.orderType, els.tableNo, els.custName, els.custPhone,
-        els.custAddress, els.orderNotes, els.paymentMethod, els.paymentSplitToggle, els.paymentSplitPeople
+        els.deliveryFee, els.custAddress, els.orderNotes, els.paymentMethod, els.paymentSplitToggle, els.paymentSplitPeople
       ];
       for (const f of fields){
         if (!f) continue;
@@ -1657,6 +1672,8 @@
     function resetCheckoutState(){
       closingTableId = null;
       closingTableIds = null;
+      activeReceivableId = null;
+      if (els.deliveryFee) els.deliveryFee.value = "";
       resetPaymentSplitState(calcTotals().total);
       unlockCheckoutFields();
       forceEnableCheckoutModal();
@@ -1666,7 +1683,7 @@
     }
 
     function clearCheckoutInvalid(){
-      [els.orderType, els.tableNo, els.custName, els.custPhone, els.custAddress].forEach(el => {
+      [els.orderType, els.tableNo, els.deliveryFee, els.custName, els.custPhone, els.custAddress].forEach(el => {
         if (el) el.classList.remove("invalid");
       });
     }
@@ -1681,6 +1698,7 @@
       clearCheckoutInvalid();
       const type = els.orderType.value;
       const table = els.tableNo.value.trim();
+      const feeRaw = String(els.deliveryFee?.value || "").trim();
       const name = els.custName.value.trim();
       const phone = els.custPhone.value.trim();
       const address = els.custAddress.value.trim();
@@ -1700,6 +1718,18 @@
         els.custName.focus();
         toast("Informe o nome do cliente.", "error");
         return false;
+      }
+
+      if (type === "entrega" || type === "a_receber"){
+        if (feeRaw){
+          const parsedFee = parsePaymentAmountInput(feeRaw);
+          if (!Number.isFinite(parsedFee) || parsedFee < 0){
+            els.deliveryFee.classList.add("invalid");
+            els.deliveryFee.focus();
+            toast("Informe uma taxa de entrega válida.", "error");
+            return false;
+          }
+        }
       }
 
       if (type === "entrega"){
@@ -1735,6 +1765,7 @@
       if (els.opsTablesModal) els.opsTablesModal.style.display = "none";
       if (els.opsKitchenModal) els.opsKitchenModal.style.display = "none";
       if (els.deliveryModal) els.deliveryModal.style.display = "none";
+      if (els.receivableModal) els.receivableModal.style.display = "none";
       if (els.cashModal) els.cashModal.style.display = "none";
       if (els.managerLoginModal) els.managerLoginModal.style.display = "none";
       if (els.salesModal) els.salesModal.style.display = "none";
@@ -2142,6 +2173,10 @@
         closeOpsKitchenModal();
         return true;
       }
+      if (els.receivableModal && els.receivableModal.style.display === "flex"){
+        closeReceivableModal();
+        return true;
+      }
       if (els.deliveryModal && els.deliveryModal.style.display === "flex"){
         closeDeliveryModal();
         return true;
@@ -2226,10 +2261,17 @@
     });
 
     function updatePaymentVisibility(){
-      const isMesa = els.orderType.value === "mesa";
-      const needsPay = (!isMesa) || (closingTableId !== null);
+      const orderType = String(els.orderType?.value || "");
+      const isEntrega = orderType === "entrega";
+      const hasDeliveryFee = isEntrega || orderType === "a_receber";
+      const isMesa = orderType === "mesa";
+      const isDeferredType = orderType === "mesa" || orderType === "a_receber";
+      const needsPay = (!isDeferredType) || (closingTableId !== null);
       const totalTarget = calcTotals().total;
       const compactCheckout = window.matchMedia("(max-width: 560px)").matches;
+
+      if (els.tableNoField) els.tableNoField.style.display = isMesa ? "grid" : "none";
+      if (els.deliveryFeeField) els.deliveryFeeField.style.display = hasDeliveryFee ? "grid" : "none";
 
       if (els.paymentBlock && els.paymentRow){
         els.paymentBlock.style.display = needsPay ? "grid" : "none";
@@ -2247,12 +2289,35 @@
         setSplitPaymentEnabled(splitEnabled, totalTarget);
         els.metaPay.textContent = getCheckoutPaymentMeta();
       }
+
+      renderTotals();
+      if (els.checkoutTotal) els.checkoutTotal.value = brl(totalTarget);
     }
 
     // Atualiza meta tags no carrinho (só visual)
     els.orderType.addEventListener("change", () => {
-      els.metaType.textContent = els.orderType.value.charAt(0).toUpperCase() + els.orderType.value.slice(1);
+      if (els.orderType.value !== "a_receber") activeReceivableId = null;
+      els.metaType.textContent = prettyType(els.orderType.value);
       updatePaymentVisibility();
+    });
+    if (els.deliveryFee) els.deliveryFee.addEventListener("input", () => {
+      const totalTarget = calcTotals().total;
+      renderTotals();
+      if (els.checkoutTotal) els.checkoutTotal.value = brl(totalTarget);
+      if (els.paymentSplitToggle?.checked) updatePaymentSplitHint(totalTarget);
+    });
+    if (els.deliveryFee) els.deliveryFee.addEventListener("change", () => {
+      const fee = parseCurrentDeliveryFee();
+      els.deliveryFee.value = fee > 0 ? formatPaymentAmountInput(fee) : "";
+      const totalTarget = calcTotals().total;
+      renderTotals();
+      if (els.checkoutTotal) els.checkoutTotal.value = brl(totalTarget);
+      if (els.paymentSplitToggle?.checked) updatePaymentSplitHint(totalTarget);
+    });
+    els.custName.addEventListener("input", () => {
+      if (els.orderType.value === "a_receber" && closingTableId === null){
+        activeReceivableId = null;
+      }
     });
     els.paymentMethod.addEventListener("change", () => {
       if (els.paymentSplitToggle?.checked) return;
@@ -2309,17 +2374,21 @@
 
       try{
         const totals = calcTotals();
-        const isMesa = els.orderType.value === "mesa";
-        const payNow = (!isMesa) || (closingTableId !== null);
+        const orderType = String(els.orderType.value || "");
+        const isDeferredType = orderType === "mesa" || orderType === "a_receber";
+        const payNow = (!isDeferredType) || (closingTableId !== null);
         const paymentData = resolveCheckoutPayment(payNow, totals.total);
 
         const payload = {
-          order_type: els.orderType.value,
+          order_type: orderType,
           table_no: els.tableNo.value.trim(),
           customer_name: els.custName.value.trim(),
           customer_phone: els.custPhone.value.trim(),
           address: els.custAddress.value.trim(),
           notes: els.orderNotes.value.trim(),
+          receivable_id: (orderType === "a_receber" && !closingTableId && Number.isFinite(Number(activeReceivableId)))
+            ? Number(activeReceivableId)
+            : null,
 
           payment_method: paymentData.payment_method,
           payment_splits: paymentData.payment_splits,
@@ -2337,7 +2406,7 @@
         setButtonLoading(els.checkoutConfirm, true, "Salvando...");
 
         if (closingTableId){
-          if (!paymentData.payment_method) throw new Error("Informe o pagamento para fechar a mesa");
+          if (!paymentData.payment_method) throw new Error("Informe o pagamento para fechar o pedido");
 
           const ids = (Array.isArray(closingTableIds) && closingTableIds.length)
             ? closingTableIds
@@ -2372,6 +2441,7 @@
 
           closingTableId = null;
           closingTableIds = null;
+          activeReceivableId = null;
           updatePaymentVisibility();
           cart.clear();
           renderCart();
@@ -2394,6 +2464,7 @@
           cart.clear();
           renderCart();
           resetPaymentSplitState(0);
+          activeReceivableId = null;
         }
 
       } catch (e){
