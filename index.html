@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>MFAS PDV </title>
   <link rel="stylesheet" href="style.css" />
 
@@ -25,7 +25,7 @@
           <button class="pill" type="button" id="opsKitchenBtn">👨‍🍳 Cozinha</button>
           <button class="pill" type="button" id="deliveryBtn">🛵 Delivery</button>
           <button class="pill" type="button" id="reportsBtn" data-role-only="manager">📊 Relatórios</button>
-          <button class="pill" type="button" id="systemBtn">⚙️ Sistema</button>
+          <button class="pill" type="button" id="expensesBtn" data-role-only="manager">💸 Despesas</button>
           <div class="pill" id="cashPill" title="Clique para abrir/fechar o caixa" data-role-only="manager">
             <span class="dot" id="cashDot"></span>
             <span id="cashText">Caixa: ABERTO</span>
@@ -45,6 +45,9 @@
           </button>
           <button class="btn slimBtn" type="button" id="addonManagerBtn">
             <span class="icon">🧩</span>Acompanhamentos
+          </button>
+          <button class="btn slimBtn" type="button" id="systemBtn">
+            <span class="icon">⚙️</span>Sistema
           </button>
           <button class="btn slimBtn" type="button" onclick="window.open('https://wa.me/5512933008987','_blank')">
             <span class="icon">📲</span>Suporte
@@ -434,7 +437,7 @@
 
       <div class="modalBody">
         <div class="field">
-          <label>Data base</label>
+          <label>Calendário (data base)</label>
           <input id="reportDate" type="date" />
           <div class="hint">Use a data para gerar o relatório diário, mensal ou anual.</div>
         </div>
@@ -483,6 +486,101 @@
               <button class="btn reportBtn reportBtnThin" type="button" data-report="last" data-mode="detailed">Abrir detalhado</button>
             </div>
           </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CAIXA -->
+  <div class="modalOverlay" id="cashModal">
+    <div class="modal cashModalDialog" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3>Caixa</h3>
+        <button class="closeX" type="button" id="cashModalClose">✖</button>
+      </div>
+
+      <div class="modalBody">
+        <div class="opsCard cashSummaryCard">
+          <div style="display:flex; gap:8px; align-items:center; justify-content:space-between;">
+            <div class="opsTitle">Resumo</div>
+            <button class="btnGhost" type="button" id="expensesRefresh">Atualizar</button>
+          </div>
+          <div id="expensesSummary" class="expensesSummary"></div>
+        </div>
+
+        <div class="cashControlsGrid">
+          <div class="sysCard cashStatusCard">
+            <div class="sysTitle">Status</div>
+            <div id="cashModalStatus" class="diagBox">Carregando...</div>
+            <button class="btnGhost" type="button" id="cashResetBtn" data-role-only="manager">Resetar Tudo</button>
+          </div>
+
+          <div class="sysCard" id="cashOpenCard">
+            <div class="sysTitle">Abrir caixa</div>
+            <div class="field">
+              <label>Valor de abertura (R$)</label>
+              <input id="cashOpenAmount" placeholder="Ex: 150,00" inputmode="decimal" />
+            </div>
+            <button class="btn" type="button" id="cashOpenBtn" data-role-only="manager">
+              <span class="icon">🔓</span>Abrir Caixa
+            </button>
+          </div>
+
+          <div class="sysCard" id="cashCloseCard">
+            <div class="sysTitle">Fechar caixa</div>
+            <div class="hint">Ao fechar, o sistema gera o relatório com vendas, despesas e saldo esperado.</div>
+            <button class="btnGhost" type="button" id="cashCloseBtn" data-role-only="manager">Fechar Caixa</button>
+          </div>
+        </div>
+
+        <div class="opsCard cashLaunchCard">
+          <div class="opsTitle">Lançamentos</div>
+          <div id="expensesList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: DESPESAS / SANGRIA -->
+  <div class="modalOverlay" id="expensesModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3>Despesas do Caixa</h3>
+        <div style="display:flex; gap:8px; align-items:center">
+          <button class="closeX" type="button" id="expensesClose">✖</button>
+        </div>
+      </div>
+
+      <div class="modalBody">
+        <div class="sysCard">
+          <div class="sysTitle">Lançar movimentação</div>
+          <div class="formGrid">
+            <div class="field">
+              <label>Tipo</label>
+              <select id="expenseType">
+                <option value="sangria">Sangria</option>
+                <option value="despesa">Despesa</option>
+                <option value="pagamento_funcionario">Pagamento de funcionário</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Valor (R$)</label>
+              <input id="expenseAmount" placeholder="Ex: 50,00" inputmode="decimal" />
+            </div>
+          </div>
+          <div class="field" id="expenseEmployeeField" style="display:none">
+            <label>Funcionário</label>
+            <input id="expenseEmployee" placeholder="Nome do funcionário" />
+          </div>
+          <div class="field">
+            <label>Motivo</label>
+            <input id="expenseReason" placeholder="Ex: vale transporte, compra de insumo..." />
+          </div>
+          <button class="btn" type="button" id="expenseSave" data-role-only="manager">
+            <span class="icon">💾</span>Salvar movimentação
+          </button>
+          <div class="hint">Sangria, despesa e pagamento de funcionário exigem motivo.</div>
         </div>
       </div>
     </div>
@@ -771,7 +869,7 @@
 
   <!-- MODAL: CONFIRMAÇÃO -->
   <div class="modalOverlay" id="confirmModal">
-    <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal modalCompact" role="dialog" aria-modal="true">
       <div class="modalHeader">
         <h3 id="confirmTitle">Confirmação</h3>
         <button class="closeX" type="button" id="confirmClose">✖</button>
@@ -782,6 +880,44 @@
       <div class="modalFooter">
         <button class="btnGhost" type="button" id="confirmCancel">Cancelar</button>
         <button class="btn" type="button" id="confirmOk">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ESCOLHA -->
+  <div class="modalOverlay" id="choiceModal">
+    <div class="modal modalCompact" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3 id="choiceTitle">Escolha uma opção</h3>
+        <button class="closeX" type="button" id="choiceClose">✖</button>
+      </div>
+      <div class="modalBody">
+        <div class="diagBox" id="choiceMessage">Selecione uma opção para continuar.</div>
+        <div id="choiceOptions" class="choiceOptions"></div>
+      </div>
+      <div class="modalFooter">
+        <button class="btnGhost" type="button" id="choiceCancel">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ENTRADA -->
+  <div class="modalOverlay" id="promptModal">
+    <div class="modal modalCompact" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <h3 id="promptTitle">Informar valor</h3>
+        <button class="closeX" type="button" id="promptClose">✖</button>
+      </div>
+      <div class="modalBody">
+        <div class="diagBox" id="promptMessage">Preencha o campo abaixo.</div>
+        <div class="field" style="margin-top:12px;">
+          <label id="promptLabel">Valor</label>
+          <input id="promptInput" />
+        </div>
+      </div>
+      <div class="modalFooter">
+        <button class="btnGhost" type="button" id="promptCancel">Cancelar</button>
+        <button class="btn" type="button" id="promptOk">OK</button>
       </div>
     </div>
   </div>
@@ -862,7 +998,12 @@
     decoding="async"
   />
 
-  <script src="app.js" defer></script>
+  <script src="js/core/helpers.js" defer></script>
+  <script src="js/app/01-bootstrap-demo.js" defer></script>
+  <script src="js/app/02-logs-state-products.js" defer></script>
+  <script src="js/app/03-ui-ops-reports-expenses.js" defer></script>
+  <script src="js/app/04-system-products-cart-checkout.js" defer></script>
+  <script src="js/app/05-import-init.js" defer></script>
 
 </body>
 </html>

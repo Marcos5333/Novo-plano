@@ -29,6 +29,10 @@
 
     *{box-sizing:border-box}
     html,body{height:100%}
+    html{
+      -webkit-text-size-adjust:100%;
+      text-size-adjust:100%;
+    }
     body{
       margin:0;
       font-family:var(--font);
@@ -124,6 +128,7 @@
       letter-spacing:.2px;
       cursor:pointer;
       user-select:none;
+      touch-action:manipulation;
     }
     .dot{
       width:10px;height:10px;border-radius:999px;
@@ -146,6 +151,7 @@
     .btn{
       cursor:pointer;
       user-select:none;
+      touch-action:manipulation;
       border:0;
       padding:12px 14px;
       border-radius:10px;
@@ -900,6 +906,11 @@
       z-index:999;
       overflow-y:auto;
     }
+    #confirmModal,
+    #choiceModal,
+    #promptModal{
+      z-index:1200;
+    }
     .modal{
       width:min(720px, 100%);
       background: #ffffff;
@@ -909,6 +920,62 @@
       position:relative;
       overflow:hidden;
       max-height: calc(100vh - 36px);
+    }
+    .modalCompact{
+      width:min(560px, 100%);
+      border-radius:16px;
+      box-shadow: 0 20px 38px rgba(20,35,70,.20);
+    }
+    .modalCompact .modalHeader{
+      padding:12px 14px;
+    }
+    .modalCompact .modalBody{
+      padding:14px;
+      gap:10px;
+    }
+    .modalCompact .modalFooter{
+      padding:10px 14px 14px 14px;
+      gap:8px;
+    }
+    .modalCompact .diagBox{
+      border-radius:12px;
+      font-size:13px;
+      padding:10px 12px;
+    }
+    .modalCompact .btn,
+    .modalCompact .btnGhost{
+      min-height:40px;
+      padding:10px 14px;
+      border-radius:12px;
+      justify-content:center;
+    }
+    .choiceOptions{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap:8px;
+      margin-top:8px;
+      align-items:start;
+    }
+    .choiceOptions .btn,
+    .choiceOptions .btnGhost{
+      width:100%;
+      margin:0;
+      font-size:15px;
+      letter-spacing:.15px;
+      box-shadow: 0 6px 14px rgba(20,35,70,.12);
+      border-radius:12px;
+      justify-content:center;
+    }
+    #choiceModal .modalFooter,
+    #confirmModal .modalFooter,
+    #promptModal .modalFooter{
+      justify-content:flex-end;
+    }
+    #choiceModal .btnGhost,
+    #confirmModal .btnGhost,
+    #promptModal .btnGhost{
+      background:#f7f9fc;
+      border-color: rgba(18,28,65,.20);
     }
     .modal:before{
       display:none;
@@ -970,7 +1037,7 @@
       border-radius: 14px;
       padding:12px 12px;
       font-weight:900;
-      font-size:13px;
+      font-size:14px;
       outline:none;
       box-shadow: 0 10px 18px rgba(0,0,0,.06);
       background: #fff;
@@ -989,6 +1056,7 @@
       padding:12px 14px;
       cursor:pointer;
       font-weight:1000;
+      touch-action:manipulation;
     }
     .printModal .modal{
       width:min(420px, 100%);
@@ -1420,6 +1488,194 @@
       }
     }
 
+    #expensesModal .modal{
+      width:min(980px, 100%);
+    }
+    #cashModal .cashModalDialog{
+      width:min(1080px, 100%);
+    }
+    #cashModal .modalBody{
+      gap:14px;
+      background:
+        radial-gradient(1000px 300px at -10% -10%, rgba(37,99,235,.08), transparent 45%),
+        radial-gradient(900px 260px at 120% 0%, rgba(24,214,255,.08), transparent 45%);
+    }
+    .cashControlsGrid{
+      display:grid;
+      grid-template-columns: 1.3fr 1fr 1fr;
+      gap:10px;
+      align-items:start;
+    }
+    .cashSummaryCard{
+      border:1px solid rgba(37,99,235,.18);
+      box-shadow: 0 14px 24px rgba(37,99,235,.12);
+      background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(246,250,255,.98));
+    }
+    .cashStatusCard{
+      border:1px solid rgba(37,99,235,.24);
+      box-shadow: 0 14px 24px rgba(37,99,235,.12);
+      background: linear-gradient(165deg, rgba(255,255,255,.98), rgba(241,247,255,.98));
+    }
+    .cashStatusCard .diagBox{
+      border-style:solid;
+      border-color: rgba(37,99,235,.24);
+      background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(245,250,255,.94));
+      font-size:12px;
+      line-height:1.45;
+    }
+    .cashLaunchCard{
+      border:1px solid rgba(18,28,65,.16);
+      box-shadow: 0 12px 24px rgba(0,0,0,.08);
+      background: linear-gradient(180deg, rgba(255,255,255,.99), rgba(250,252,255,.98));
+    }
+    .expensesSummary{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap:8px;
+    }
+    .expenseStat{
+      position:relative;
+      overflow:hidden;
+      border:1px solid rgba(37,99,235,.16);
+      border-radius:14px;
+      padding:12px;
+      background: linear-gradient(160deg, #ffffff, #f4f9ff);
+      box-shadow: 0 10px 18px rgba(37,99,235,.09);
+      display:grid;
+      gap:6px;
+    }
+    .expenseStat::before{
+      content:"";
+      position:absolute;
+      top:0;
+      left:0;
+      width:100%;
+      height:3px;
+      background: linear-gradient(90deg, #2563eb, #3b82f6, #24d6ff);
+    }
+    .expenseStat b{
+      font-size:17px;
+      color:#1f2a44;
+      letter-spacing:.2px;
+    }
+    .expenseStat span{
+      font-size:10px;
+      color:#586178;
+      font-weight:1000;
+      text-transform:uppercase;
+      letter-spacing:.5px;
+    }
+    .expenseList{
+      display:grid;
+      gap:8px;
+    }
+    .expenseRow{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:flex-start;
+      padding:10px;
+      border:1px solid rgba(18,28,65,.12);
+      border-radius:12px;
+      background:#fff;
+    }
+    .expenseMeta{
+      font-size:11px;
+      color:var(--muted);
+      font-weight:900;
+      margin-top:2px;
+    }
+    .expenseAmount{
+      font-weight:1000;
+      white-space:nowrap;
+      color:#1f2a44;
+    }
+    .expenseRowActions{
+      display:grid;
+      gap:6px;
+      justify-items:end;
+      align-items:start;
+    }
+    .expenseMenu{
+      position:relative;
+    }
+    .expenseMenu summary{
+      list-style:none;
+      cursor:pointer;
+      user-select:none;
+    }
+    .expenseMenu summary::-webkit-details-marker{
+      display:none;
+    }
+    .expenseMenuList{
+      position:absolute;
+      top:100%;
+      right:0;
+      margin-top:6px;
+      z-index:8;
+      min-width:118px;
+      display:grid;
+      gap:6px;
+      padding:8px;
+      border-radius:10px;
+      border:1px solid rgba(18,28,65,.16);
+      background:#fff;
+      box-shadow: 0 10px 18px rgba(0,0,0,.10);
+    }
+    .expenseMenuList .miniBtn{
+      width:100%;
+      justify-content:center;
+      display:flex;
+      align-items:center;
+      gap:6px;
+    }
+    @media (max-width: 980px){
+      .cashControlsGrid{
+        grid-template-columns:1fr;
+      }
+    }
+
+    /* ===== Presets Mobile por Plataforma ===== */
+    @media (max-width: 1024px){
+      html.platform-ios input,
+      html.platform-ios select,
+      html.platform-ios textarea{
+        font-size:16px !important;
+      }
+      html.platform-ios .modalOverlay{
+        padding-left:max(10px, env(safe-area-inset-left));
+        padding-right:max(10px, env(safe-area-inset-right));
+        padding-bottom:max(10px, env(safe-area-inset-bottom));
+      }
+      html.platform-ios .modal{
+        max-height:calc(100dvh - 14px);
+      }
+      html.platform-ios .modalBody{
+        max-height:calc(100dvh - 132px - env(safe-area-inset-bottom));
+      }
+      html.platform-ios .modalFooter{
+        padding-bottom:calc(12px + env(safe-area-inset-bottom));
+      }
+
+      html.platform-android .pill,
+      html.platform-android .btn,
+      html.platform-android .btnGhost,
+      html.platform-android .cta,
+      html.platform-android .add{
+        min-height:46px;
+      }
+      html.platform-android .modal{
+        width:min(calc(100vw - 12px), 760px);
+      }
+      html.platform-android .modalBody{
+        scroll-padding-bottom:96px;
+      }
+      html.platform-android .modalFooter .btn,
+      html.platform-android .modalFooter .btnGhost{
+        min-height:46px;
+      }
+    }
+
     /* ===== Mobile Responsivo (sem alterar layout original) ===== */
     @media (max-width: 720px){
       .wrap{width:100%; margin:0; padding:10px}
@@ -1539,6 +1795,10 @@
       .modalFooter{
         padding:12px;
         flex-wrap:wrap;
+        position:sticky;
+        bottom:0;
+        z-index:2;
+        background: linear-gradient(180deg, rgba(255,255,255,.90), #fff 28%);
       }
       .modalFooter .btn,
       .modalFooter .btnGhost{
@@ -1557,6 +1817,9 @@
       .reportCard{
         padding:10px;
         border-radius:14px;
+      }
+      input, select, textarea{
+        font-size:16px;
       }
     }
 
@@ -1584,7 +1847,7 @@
       .btnGhost,
       .add,
       .cta{
-        min-height:40px;
+        min-height:44px;
         padding:10px 12px;
       }
       .btn .icon{
@@ -1632,7 +1895,7 @@
       }
       input, select, textarea{
         padding:10px;
-        font-size:12px;
+        font-size:16px;
         border-radius:12px;
       }
       .grand{
