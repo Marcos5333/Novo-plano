@@ -188,6 +188,7 @@
         if (pm.includes("pix")) return "pix";
         if (pm.includes("deb")) return "debito";
         if (pm.includes("cre")) return "credito";
+        if (pm.includes("pedido_pago") || pm.includes("pedido pago")) return "pedido_pago";
         return "outros";
       }
 
@@ -318,7 +319,7 @@
           }))
           .sort((a, b) => a.id - b.id);
 
-        const byPay = { dinheiro: 0, pix: 0, debito: 0, credito: 0, outros: 0 };
+        const byPay = { dinheiro: 0, pix: 0, debito: 0, credito: 0, pedido_pago: 0, outros: 0 };
         let totalGeral = 0;
         for (const row of rows){
           const t = Number(row.total || 0);
@@ -650,6 +651,7 @@ ${bodyHtml}
             <div>Pix: ${escapeHtml(brl(paymentTotals.pix || 0))}</div>
             <div>Debito: ${escapeHtml(brl(paymentTotals.debito || 0))}</div>
             <div>Credito: ${escapeHtml(brl(paymentTotals.credito || 0))}</div>
+            <div>Pedido Pago: ${escapeHtml(brl(paymentTotals.pedido_pago || 0))}</div>
             <div>Outros: ${escapeHtml(brl(paymentTotals.outros || 0))}</div>
           </div>
         `;

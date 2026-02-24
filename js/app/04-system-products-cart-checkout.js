@@ -737,6 +737,41 @@
     }
 
     // ===== Render Carrinho =====
+    const mobileCartMedia = window.matchMedia("(max-width: 900px)");
+
+    function cartQtyCount(){
+      let qty = 0;
+      for (const item of cart.values()){
+        qty += Number(item?.qty || 0);
+      }
+      return qty;
+    }
+
+    function updateMobileCartFab(totals){
+      if (!els.mobileCartFab || !els.mobileCartFabCount || !els.mobileCartFabTotal) return;
+
+      const qty = cartQtyCount();
+      const total = Number(totals?.total);
+      const safeTotal = Number.isFinite(total) ? total : 0;
+      const show = mobileCartMedia.matches;
+      const isEmpty = qty <= 0;
+
+      els.mobileCartFabCount.textContent = isEmpty
+        ? "Carrinho"
+        : (qty === 1 ? "1 item" : `${qty} itens`);
+      els.mobileCartFabTotal.textContent = isEmpty
+        ? "Toque para abrir"
+        : brl(safeTotal);
+      els.mobileCartFab.classList.toggle("is-visible", show);
+      els.mobileCartFab.classList.toggle("is-empty", isEmpty);
+      els.mobileCartFab.setAttribute("aria-hidden", show ? "false" : "true");
+    }
+
+    function scrollToCartPanel(){
+      if (!els.cartPanel) return;
+      els.cartPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
     function renderCart(){
       const isEmpty = cart.size === 0;
       els.emptyState.style.display = isEmpty ? "block" : "none";
@@ -792,6 +827,7 @@
       els.discount.textContent = brl(discount);
       els.fee.textContent = brl(fee);
       els.total.textContent = brl(total);
+      updateMobileCartFab({ total });
     }
 
     // ===== Carrinho +/− =====
@@ -835,6 +871,20 @@
       activeReceivableId = null;
       updatePaymentVisibility();
     });
+
+    if (els.mobileCartFab) els.mobileCartFab.addEventListener("click", () => {
+      if (cart.size === 0){
+        toast("Carrinho vazio 😅", "info");
+        return;
+      }
+      scrollToCartPanel();
+    });
+    const refreshMobileCartFab = () => updateMobileCartFab(calcTotals());
+    if (mobileCartMedia?.addEventListener){
+      mobileCartMedia.addEventListener("change", refreshMobileCartFab);
+    } else if (mobileCartMedia?.addListener){
+      mobileCartMedia.addListener(refreshMobileCartFab);
+    }
 
     // ===== Produto Modal (Cadastrar/Editar) =====
     function openProductModal(mode, product){
@@ -1488,7 +1538,7 @@
       return roundMoney(value).toFixed(2).replace(".", ",");
     }
 
-    const PAYMENT_METHOD_VALUES = Object.freeze(["dinheiro", "pix", "debito", "credito"]);
+    const PAYMENT_METHOD_VALUES = Object.freeze(["dinheiro", "pix", "debito", "credito", "pedido_pago"]);
     const PAYMENT_METHOD_SET = new Set(PAYMENT_METHOD_VALUES);
 
     function buildPaymentMethodOptions(selected){

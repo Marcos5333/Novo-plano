@@ -107,6 +107,10 @@
       discount: document.getElementById("discount"),
       fee: document.getElementById("fee"),
       total: document.getElementById("total"),
+      cartPanel: document.getElementById("cartPanel"),
+      mobileCartFab: document.getElementById("mobileCartFab"),
+      mobileCartFabCount: document.getElementById("mobileCartFabCount"),
+      mobileCartFabTotal: document.getElementById("mobileCartFabTotal"),
 
       finishBtn: document.getElementById("finishBtn"),
       clearBtn: document.getElementById("clearBtn"),
@@ -1219,10 +1223,10 @@
         return;
       }
 
-      const paymentInput = await safePrompt("Pagamento (dinheiro/pix/debito/credito):", String(order?.payment_method || "dinheiro"));
+      const paymentInput = await safePrompt("Pagamento (dinheiro/pix/debito/credito/pedido_pago):", String(order?.payment_method || "dinheiro"));
       if (paymentInput === null) return;
       const payment = String(paymentInput || "").trim().toLowerCase();
-      if (!["dinheiro", "pix", "debito", "credito"].includes(payment)){
+      if (!["dinheiro", "pix", "debito", "credito", "pedido_pago"].includes(payment)){
         toast("Pagamento inválido.", "error");
         return;
       }

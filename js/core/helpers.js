@@ -186,6 +186,7 @@
     pix: "PIX",
     debito: "Débito",
     credito: "Crédito",
+    pedido_pago: "Pedido Pago",
   });
 
   function paymentMethodLabel(method){

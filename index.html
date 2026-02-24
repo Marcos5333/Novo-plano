@@ -81,7 +81,7 @@
       </section>
 
       <!-- DIREITA: Carrinho -->
-      <aside class="card cart">
+      <aside class="card cart" id="cartPanel">
         <div class="cartBox">
           <div class="cartHeader">
             <div>
@@ -344,6 +344,7 @@
                 <option value="pix">PIX</option>
                 <option value="debito">Débito</option>
                 <option value="credito">Crédito</option>
+                <option value="pedido_pago">Pedido Pago</option>
               </select>
             </div>
 
@@ -852,6 +853,7 @@
               <option value="pix">Pix</option>
               <option value="debito">Débito</option>
               <option value="credito">Crédito</option>
+              <option value="pedido_pago">Pedido Pago</option>
             </select>
           </div>
           <div class="modalFooter" style="padding:0; margin-top:6px">
@@ -1018,6 +1020,15 @@
 
   <!-- TOASTS -->
   <div class="toastStack" id="toastStack" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- CARRINHO FLUTUANTE (MOBILE) -->
+  <button class="mobileCartFab" type="button" id="mobileCartFab" aria-label="Abrir carrinho" aria-hidden="true">
+    <span class="mobileCartFabIcon" aria-hidden="true">🛒</span>
+    <span class="mobileCartFabText">
+      <b id="mobileCartFabCount">0 itens</b>
+      <small id="mobileCartFabTotal">R$ 0,00</small>
+    </span>
+  </button>
 
   <!-- Assinatura (desktop) -->
   <img
