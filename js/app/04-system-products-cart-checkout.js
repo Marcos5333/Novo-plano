@@ -484,11 +484,187 @@
       setTimeout(() => els.addonEditNameInput?.focus(), 0);
     }
 
+    const COMPANY_NAME_KEY = "mvs_company_name_v1";
+    const COMPANY_LOGO_KEY = "mvs_company_logo_v1";
+    const COMPANY_NAME_DEFAULT = "MVS TECHSOLUTION";
+    const COMPANY_LOGO_FALLBACK = "mvs-logo.png";
+
+    function normalizeCompanyName(value){
+      const clean = String(value || "").replace(/\s+/g, " ").trim();
+      if (!clean) return COMPANY_NAME_DEFAULT;
+      return clean.slice(0, 60);
+    }
+
+    function getStoredCompanyName(){
+      try{
+        return normalizeCompanyName(localStorage.getItem(COMPANY_NAME_KEY) || COMPANY_NAME_DEFAULT);
+      } catch {
+        return COMPANY_NAME_DEFAULT;
+      }
+    }
+
+    function getStoredCompanyLogo(){
+      try{
+        return String(localStorage.getItem(COMPANY_LOGO_KEY) || "").trim();
+      } catch {
+        return "";
+      }
+    }
+
+    function setStoredCompanyName(value){
+      try{
+        localStorage.setItem(COMPANY_NAME_KEY, normalizeCompanyName(value));
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    function setStoredCompanyLogo(value){
+      try{
+        if (!value){
+          localStorage.removeItem(COMPANY_LOGO_KEY);
+        } else {
+          localStorage.setItem(COMPANY_LOGO_KEY, String(value));
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    function renderCompanyBrandHeader(name, logoSrc){
+      const safeName = normalizeCompanyName(name);
+      const safeLogo = String(logoSrc || COMPANY_LOGO_FALLBACK).trim() || COMPANY_LOGO_FALLBACK;
+
+      if (els.brandCompanyName){
+        els.brandCompanyName.textContent = safeName;
+      }
+      if (!els.brandLogoImg) return;
+
+      const showFallback = () => {
+        if (els.brandLogoImg) els.brandLogoImg.style.display = "none";
+        if (els.brandLogoFallback) els.brandLogoFallback.style.display = "grid";
+      };
+      const showLogo = () => {
+        if (els.brandLogoImg) els.brandLogoImg.style.display = "block";
+        if (els.brandLogoFallback) els.brandLogoFallback.style.display = "none";
+      };
+
+      els.brandLogoImg.alt = `Logo da empresa ${safeName}`;
+      els.brandLogoImg.onerror = showFallback;
+      els.brandLogoImg.onload = showLogo;
+      els.brandLogoImg.src = safeLogo;
+      if (safeLogo === COMPANY_LOGO_FALLBACK){
+        showLogo();
+      }
+    }
+
+    function renderCompanyBrandCard(opts = {}){
+      const preserveInput = !!opts.preserveInput;
+      const name = getStoredCompanyName();
+      const customLogo = getStoredCompanyLogo();
+      const previewSrc = customLogo || COMPANY_LOGO_FALLBACK;
+
+      if (els.companyNameInput){
+        const shouldKeep = preserveInput && document.activeElement === els.companyNameInput;
+        if (!shouldKeep){
+          els.companyNameInput.value = name;
+        }
+      }
+      if (els.companyLogoPreview){
+        els.companyLogoPreview.src = previewSrc;
+        els.companyLogoPreview.alt = `Logo da empresa ${name}`;
+        els.companyLogoPreview.onerror = () => {
+          if (previewSrc !== COMPANY_LOGO_FALLBACK){
+            els.companyLogoPreview.src = COMPANY_LOGO_FALLBACK;
+          }
+        };
+      }
+      if (els.companyLogoRemoveBtn){
+        els.companyLogoRemoveBtn.disabled = !isManager();
+      }
+      renderCompanyBrandHeader(name, previewSrc);
+    }
+
+    function fileToDataUrl(file){
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("Não foi possível ler a imagem."));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function loadImageFromDataUrl(dataUrl){
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("Arquivo de imagem inválido."));
+        img.src = dataUrl;
+      });
+    }
+
+    async function normalizeLogoFile(file){
+      const type = String(file?.type || "").toLowerCase();
+      if (!["image/png", "image/jpeg", "image/jpg"].includes(type)){
+        throw new Error("Formato inválido. Use PNG ou JPG.");
+      }
+      const raw = await fileToDataUrl(file);
+      const img = await loadImageFromDataUrl(raw);
+      const maxSide = 360;
+      const scale = Math.min(1, maxSide / Math.max(img.width || 1, img.height || 1));
+      const w = Math.max(1, Math.round((img.width || 1) * scale));
+      const h = Math.max(1, Math.round((img.height || 1) * scale));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Falha ao processar logo.");
+      ctx.drawImage(img, 0, 0, w, h);
+
+      const outputType = type === "image/png" ? "image/png" : "image/jpeg";
+      return canvas.toDataURL(outputType, outputType === "image/jpeg" ? 0.9 : undefined);
+    }
+
+    function saveCompanyNameFromInput(){
+      if (!requireManager()) return;
+      const value = normalizeCompanyName(els.companyNameInput?.value || "");
+      if (!setStoredCompanyName(value)){
+        toast("Não foi possível salvar o nome da empresa.", "error");
+        return;
+      }
+      renderCompanyBrandCard();
+      toast("Nome da empresa salvo.", "success");
+    }
+
+    async function removeCompanyLogo(){
+      if (!requireManager()) return;
+      const currentLogo = getStoredCompanyLogo();
+      if (!currentLogo){
+        toast("Nenhuma logo personalizada para remover.", "info");
+        return;
+      }
+      const ok = await openConfirmModal({
+        title: "Remover logo",
+        message: "Deseja remover a logo personalizada da empresa?"
+      });
+      if (!ok) return;
+      if (!setStoredCompanyLogo("")){
+        toast("Não foi possível remover a logo.", "error");
+        return;
+      }
+      renderCompanyBrandCard();
+      toast("Logo removida.", "success");
+    }
+
     function openSystemModal(){
       if (!els.systemModal) return;
       closeOtherModals();
       renderLogs();
       loadDiagnostics();
+      renderCompanyBrandCard();
       updateMiniStatus();
       updateSystemLock();
       updateBackupHint();
@@ -630,6 +806,7 @@
         return;
       }
       setRole("gerente");
+      renderCompanyBrandCard({ preserveInput: true });
       toast("Modo gerente ativado.", "success");
       if (els.managerPinInput) els.managerPinInput.value = "";
     });
@@ -644,6 +821,7 @@
         return;
       }
       setRole("gerente");
+      renderCompanyBrandCard({ preserveInput: true });
       toast("Modo gerente ativado.", "success");
       if (els.managerPinInputLogin) els.managerPinInputLogin.value = "";
       closeManagerLoginModal();
@@ -657,6 +835,7 @@
 
     if (els.managerLogoutBtn) els.managerLogoutBtn.addEventListener("click", () => {
       setRole("operador");
+      renderCompanyBrandCard({ preserveInput: true });
       toast("Modo operador ativado.", "info");
       if (els.managerPinInputLogin) els.managerPinInputLogin.value = "";
       if (els.managerNewPinInput) els.managerNewPinInput.value = "";
@@ -747,6 +926,39 @@
         logEvent("info", "Backup automático", enabled ? "Ativado" : "Desativado");
       });
     }
+
+    renderCompanyBrandCard();
+    if (els.companyNameSaveBtn) els.companyNameSaveBtn.addEventListener("click", saveCompanyNameFromInput);
+    if (els.companyNameInput) els.companyNameInput.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      saveCompanyNameFromInput();
+    });
+    if (els.companyLogoUploadBtn) els.companyLogoUploadBtn.addEventListener("click", () => {
+      if (!requireManager()) return;
+      if (!els.companyLogoFileInput) return;
+      els.companyLogoFileInput.value = "";
+      els.companyLogoFileInput.click();
+    });
+    if (els.companyLogoFileInput) els.companyLogoFileInput.addEventListener("change", async () => {
+      const file = els.companyLogoFileInput.files?.[0];
+      if (!file) return;
+      if (!requireManager()) return;
+      try{
+        setButtonLoading(els.companyLogoUploadBtn, true, "Enviando...");
+        const normalized = await normalizeLogoFile(file);
+        if (!setStoredCompanyLogo(normalized)){
+          throw new Error("Não foi possível salvar a logo no dispositivo.");
+        }
+        renderCompanyBrandCard();
+        toast("Logo atualizada.", "success");
+      } catch (e){
+        toast("Falha ao enviar logo: " + e.message, "error", { detail: e?.stack || e?.message });
+      } finally {
+        setButtonLoading(els.companyLogoUploadBtn, false);
+      }
+    });
+    if (els.companyLogoRemoveBtn) els.companyLogoRemoveBtn.addEventListener("click", removeCompanyLogo);
 
     if (els.addonCategorySelect) els.addonCategorySelect.addEventListener("change", renderAddonList);
     if (els.addonAddBtn) els.addonAddBtn.addEventListener("click", addAddonFromEditor);

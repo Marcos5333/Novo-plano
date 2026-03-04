@@ -81,15 +81,31 @@
     .logoImg{
       width:46px;height:46px;
       border-radius:10px;
-      object-fit:cover;
       box-shadow: 0 8px 14px rgba(37,99,235,.25);
       border: 1px solid rgba(37,99,235,.25);
       background: linear-gradient(135deg, #2563eb, #3b82f6);
       display:grid;
       place-items:center;
+      overflow:hidden;
       font-weight:900;
       color:#fff;
       letter-spacing:.5px;
+    }
+    .logoImg img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+    }
+    .logoImg span{
+      width:100%;
+      height:100%;
+      display:grid;
+      place-items:center;
+      font-weight:900;
+      color:#fff;
+      letter-spacing:.5px;
+      font-size:13px;
     }
 
     .brand h1{
@@ -479,10 +495,7 @@
       gap:12px;
     }
     .cartHeader{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:10px;
+      display:block;
     }
     .big{
       margin:0;
@@ -490,10 +503,11 @@
       letter-spacing:.2px;
     }
     .orderMeta{
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
+      display:grid;
+      grid-template-columns:repeat(3, minmax(0, 1fr));
+      gap:8px;
       margin-top:6px;
+      width:100%;
     }
     .meta{
       padding:8px 10px;
@@ -503,15 +517,24 @@
       font-weight:1000;
       color:#2a1c59;
       font-size:12px;
+      width:100%;
+      min-width:0;
+      min-height:34px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
     }
     .cartTotalTag{
       padding:8px 10px;
       border-radius:999px;
       font-weight:1000;
-      font-size:12px;
+      font-size:13px;
       letter-spacing:.2px;
-      white-space:nowrap;
-      align-self:center;
+      grid-column:1 / -1;
+      width:100%;
+      min-height:38px;
+      justify-content:center;
     }
     .cartItems{
       display:grid; gap:10px;
@@ -758,6 +781,143 @@
     }
 
     /* ===== Sistema ===== */
+    #systemModal .modalHeader{
+      padding:18px 20px;
+      border-bottom:1px solid rgba(18,28,65,.12);
+    }
+    #systemModal .modalHeader h3{
+      font-size:19px;
+      letter-spacing:.2px;
+      color:#121a30;
+      font-weight:1000;
+    }
+    #systemModal #systemClose{
+      min-width:56px;
+      min-height:56px;
+      border-radius:18px;
+      font-size:24px;
+      font-weight:1000;
+      background:#fff;
+      border:1px solid rgba(18,28,65,.16);
+      box-shadow: 0 10px 20px rgba(20,35,70,.08);
+      display:grid;
+      place-items:center;
+      padding:0;
+    }
+    .sysBrandCard{
+      border:1px solid rgba(18,28,65,.10);
+      border-radius:28px;
+      padding:16px;
+      background:#fff;
+      box-shadow: 0 12px 24px rgba(20,35,70,.07);
+      display:grid;
+      gap:14px;
+    }
+    .sysBrandTitle{
+      font-size:20px;
+      line-height:1.1;
+      color:#1f2a44;
+      font-weight:1000;
+      letter-spacing:.2px;
+    }
+    .sysBrandIntro{
+      display:grid;
+      grid-template-columns: 108px minmax(0,1fr);
+      gap:14px;
+      align-items:center;
+    }
+    .sysBrandPreview{
+      width:108px;
+      height:108px;
+      border-radius:24px;
+      border:1px solid rgba(18,28,65,.12);
+      background:#f3f5f8;
+      object-fit:cover;
+      box-shadow: 0 8px 18px rgba(20,35,70,.10);
+    }
+    .sysBrandIntroText{
+      margin:0;
+      color:#1f2a44;
+      font-size:19px;
+      line-height:1.25;
+      font-weight:1000;
+    }
+    .sysBrandActions{
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0,1fr));
+      gap:10px;
+    }
+    .sysBrandActions.single{
+      grid-template-columns:minmax(0,1fr);
+      max-width:calc(50% - 5px);
+    }
+    #systemModal .sysBrandActions .btn,
+    #systemModal .sysBrandActions .btnGhost{
+      width:100%;
+      justify-content:center;
+      min-height:48px;
+      border-radius:20px;
+      font-size:16px;
+      font-weight:1000;
+      transition:transform .12s ease, box-shadow .12s ease, background-color .15s ease, border-color .15s ease;
+    }
+    #systemModal .sysBrandActions .btn:active,
+    #systemModal .sysBrandActions .btnGhost:active{
+      transform:translateY(1px);
+    }
+    #companyNameSaveBtn{
+      background: linear-gradient(135deg, #2563eb, #3b82f6);
+      color:#ffffff;
+      border:1px solid rgba(37,99,235,.35);
+      box-shadow: 0 10px 20px rgba(37,99,235,.28);
+    }
+    #companyNameSaveBtn:hover{
+      background: linear-gradient(135deg, #1d4ed8, #2563eb);
+      border-color: rgba(29,78,216,.45);
+    }
+    #companyLogoUploadBtn,
+    #companyLogoRemoveBtn{
+      background:#ffffff;
+      color:#1f2a44;
+      border:1px solid rgba(18,28,65,.12);
+      box-shadow:none;
+    }
+    #companyLogoUploadBtn:hover,
+    #companyLogoRemoveBtn:hover{
+      color:#121a30;
+      border-color:rgba(18,28,65,.20);
+      background:#fbfcfe;
+    }
+    #companyLogoUploadBtn[disabled],
+    #companyLogoRemoveBtn[disabled],
+    #companyNameSaveBtn[disabled]{
+      opacity:.65;
+      cursor:not-allowed;
+      box-shadow:none;
+    }
+    #companyNameInput{
+      font-size:20px;
+      line-height:1.1;
+      color:#1f2a44;
+      border-radius:22px;
+      padding:14px 18px;
+      font-weight:1000;
+      text-transform:uppercase;
+      letter-spacing:.3px;
+      background:#f7f8fb;
+      border:1px solid rgba(18,28,65,.10);
+      box-shadow:none;
+    }
+    #companyNameInput::placeholder{
+      color:#c4c8cf;
+      font-weight:900;
+      text-transform:none;
+    }
+    .sysBrandCard .hint{
+      font-size:14px;
+      color:#1f2a44;
+      font-weight:1000;
+    }
     .sysGrid{
       display:grid;
       grid-template-columns: repeat(2, 1fr);
@@ -765,6 +925,59 @@
     }
     @media (max-width: 860px){
       .sysGrid{grid-template-columns:1fr}
+      .sysBrandIntroText{
+        font-size:18px;
+      }
+    }
+    @media (max-width: 560px){
+      #systemModal .modalHeader{
+        padding:14px 14px;
+      }
+      #systemModal #systemClose{
+        min-width:46px;
+        min-height:46px;
+        border-radius:14px;
+        font-size:20px;
+      }
+      .sysBrandCard{
+        border-radius:18px;
+        padding:12px;
+      }
+      .sysBrandTitle{
+        font-size:18px;
+      }
+      .sysBrandIntro{
+        grid-template-columns:74px minmax(0,1fr);
+        gap:10px;
+      }
+      .sysBrandPreview{
+        width:74px;
+        height:74px;
+        border-radius:16px;
+      }
+      .sysBrandIntroText{
+        font-size:16px;
+      }
+      .sysBrandActions{
+        grid-template-columns:1fr;
+      }
+      .sysBrandActions.single{
+        max-width:none;
+      }
+      #systemModal .sysBrandActions .btn,
+      #systemModal .sysBrandActions .btnGhost{
+        min-height:44px;
+        border-radius:14px;
+        font-size:16px;
+      }
+      #companyNameInput{
+        font-size:18px;
+        border-radius:16px;
+        padding:12px 14px;
+      }
+      .sysBrandCard .hint{
+        font-size:13px;
+      }
     }
     .sysCard{
       background:#fff;
@@ -994,6 +1207,8 @@
       border-radius: 12px;
       box-shadow: 0 18px 36px rgba(20,35,70,.18);
       position:relative;
+      display:flex;
+      flex-direction:column;
       overflow:hidden;
       max-height: calc(100vh - 36px);
       max-height: calc(100dvh - 36px);
@@ -1087,6 +1302,8 @@
       padding:16px;
       display:grid;
       gap:12px;
+      flex:1 1 auto;
+      min-height:0;
       max-height: calc(100vh - 140px);
       max-height: calc(100dvh - 140px);
       overflow-y:auto;
@@ -1979,12 +2196,14 @@
       }
       .modalBody{
         padding:12px;
-        max-height:calc(100vh - 126px);
-        max-height:calc(100dvh - 126px);
+        flex:1 1 auto;
+        min-height:0;
+        max-height:none;
         padding-bottom:calc(18px + env(safe-area-inset-bottom));
       }
       .modalFooter{
         padding:12px;
+        padding-bottom:calc(12px + env(safe-area-inset-bottom));
         flex-wrap:wrap;
         position:static;
         bottom:auto;
@@ -2062,7 +2281,7 @@
       }
       .orderMeta{
         display:grid;
-        grid-template-columns:repeat(4, minmax(0, 1fr));
+        grid-template-columns:repeat(3, minmax(0, 1fr));
         gap:6px;
       }
       .meta{
@@ -2071,10 +2290,11 @@
         text-align:center;
       }
       .cartTotalTag{
+        grid-column:1 / -1;
         width:100%;
         justify-content:center;
-        padding:6px 8px;
-        font-size:11px;
+        padding:7px 9px;
+        font-size:12px;
         border-radius:999px;
       }
       .paymentSplitToggleLine{
@@ -2087,6 +2307,22 @@
       .toast{
         min-width:0;
         width:min(100%, 360px);
+      }
+      #itemModal .modalFooter,
+      #pizzaModal .modalFooter,
+      #checkoutModal .modalFooter{
+        display:grid;
+        grid-template-columns:1fr;
+        gap:8px;
+      }
+      #itemModal .modalFooter .btn,
+      #itemModal .modalFooter .btnGhost,
+      #pizzaModal .modalFooter .btn,
+      #pizzaModal .modalFooter .btnGhost,
+      #checkoutModal .modalFooter .btn,
+      #checkoutModal .modalFooter .btnGhost{
+        width:100%;
+        justify-content:center;
       }
     }
 
@@ -2123,12 +2359,12 @@
     .mobileCartFab{
       position:fixed;
       left:auto;
-      right:12px;
-      bottom:calc(10px + env(safe-area-inset-bottom));
+      right:max(8px, env(safe-area-inset-right));
+      bottom:max(8px, calc(8px + env(safe-area-inset-bottom)));
       transform:translate(0, 14px);
       width:auto;
-      min-width:132px;
-      max-width:min(188px, calc(100% - 24px));
+      min-width:clamp(124px, 34vw, 160px);
+      max-width:min(192px, calc(100dvw - max(8px, env(safe-area-inset-left)) - max(8px, env(safe-area-inset-right))));
       border:1px solid rgba(37,99,235,.35);
       border-radius:999px;
       background: linear-gradient(135deg, #2563eb, #3b82f6);
@@ -2138,7 +2374,7 @@
       align-items:center;
       justify-content:flex-start;
       gap:6px;
-      padding:8px 11px;
+      padding:clamp(7px, 1.8vw, 9px) clamp(10px, 2.5vw, 12px);
       cursor:pointer;
       opacity:0;
       pointer-events:none;
@@ -2185,6 +2421,12 @@
       line-height:1.1;
       letter-spacing:.2px;
       font-weight:900;
+    }
+    .mobileCartFabText b,
+    .mobileCartFabText small{
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
     }
     @media (max-width: 900px){
       .mobileQuickBar{
@@ -2273,8 +2515,8 @@
     }
     @media (max-width: 420px){
       .mobileCartFab{
-        right:8px;
-        max-width:min(176px, calc(100% - 16px));
+        right:max(6px, env(safe-area-inset-right));
+        max-width:min(182px, calc(100dvw - max(6px, env(safe-area-inset-left)) - max(6px, env(safe-area-inset-right))));
       }
     }
 

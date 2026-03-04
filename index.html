@@ -12,9 +12,12 @@
   <div class="wrap">
     <header class="topbar">
       <div class="brand">
-        <div class="logoImg" aria-hidden="true">MVS</div>
+        <div class="logoImg">
+          <img id="brandLogoImg" src="mvs-logo.png" alt="Logo da empresa" decoding="async" />
+          <span id="brandLogoFallback" style="display:none">MVS</span>
+        </div>
         <div>
-          <h1>MVS TECHSOLUTION</h1>
+          <h1 id="brandCompanyName">MVS TECHSOLUTION</h1>
         </div>
       </div>
 
@@ -637,6 +640,33 @@
       </div>
 
       <div class="modalBody">
+        <div class="sysBrandCard">
+          <div class="sysBrandTitle">Marca da Loja</div>
+          <div class="sysBrandIntro">
+            <img
+              id="companyLogoPreview"
+              class="sysBrandPreview"
+              src="mvs-logo.png"
+              alt="Logo atual da empresa"
+              decoding="async"
+              loading="lazy"
+            />
+            <p class="sysBrandIntroText">Você pode personalizar nome e logo para cada cliente.</p>
+          </div>
+          <div class="field">
+            <label for="companyNameInput">Nome da empresa</label>
+            <input id="companyNameInput" data-role-only="manager" maxlength="60" placeholder="Digite o nome da empresa" />
+          </div>
+          <div class="sysBrandActions">
+            <button class="btn" type="button" id="companyNameSaveBtn" data-role-only="manager">Salvar Nome</button>
+            <button class="btnGhost" type="button" id="companyLogoUploadBtn" data-role-only="manager">Enviar Logo</button>
+          </div>
+          <div class="sysBrandActions single">
+            <button class="btnGhost" type="button" id="companyLogoRemoveBtn" data-role-only="manager">Remover Logo</button>
+          </div>
+          <div class="hint">Formatos aceitos: PNG e JPG.</div>
+          <input id="companyLogoFileInput" type="file" accept="image/png,image/jpeg" style="display:none" />
+        </div>
         <div class="sysGrid">
           <div class="sysCard compact">
             <div class="sysTitle">Backup</div>
