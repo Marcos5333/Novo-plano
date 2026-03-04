@@ -299,6 +299,6 @@
     lockSignaturePosition();
     removeSignatureBackground();
     if (window.__MVS_DEMO_STORAGE) {
-      toast("MVS Bem Vindo . Storage local ativo .", "info", { timeout: 4800 });
+      toast("MVS Tech Solution. Bem Vindo .", "info", { timeout: 4800 });
     }
   

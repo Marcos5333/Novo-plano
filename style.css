@@ -56,6 +56,9 @@
       width: min(98vw, 1680px);
       margin: 10px auto;
       padding: 14px;
+      min-height: calc(100dvh - 20px);
+      display:flex;
+      flex-direction:column;
     }
 
     /* Top Bar */
@@ -644,7 +647,8 @@
     }
 
     .footerNote{
-      margin-top:10px;
+      margin-top:auto;
+      padding-top:10px;
       text-align:center;
       color: #1f2a44;
       font-weight:900;
@@ -2510,7 +2514,12 @@
         padding-bottom:calc(90px + env(safe-area-inset-bottom));
       }
       .toastStack{
-        bottom:calc(90px + env(safe-area-inset-bottom));
+        left:max(10px, env(safe-area-inset-left));
+        right:auto;
+        bottom:max(10px, calc(10px + env(safe-area-inset-bottom)));
+      }
+      .toast{
+        max-width:min(280px, calc(100vw - 20px));
       }
     }
     @media (max-width: 420px){
