@@ -806,15 +806,15 @@
     }
     .sysBrandCard{
       border:1px solid rgba(18,28,65,.10);
-      border-radius:28px;
-      padding:16px;
+      border-radius:20px;
+      padding:12px;
       background:#fff;
       box-shadow: 0 12px 24px rgba(20,35,70,.07);
       display:grid;
-      gap:14px;
+      gap:10px;
     }
     .sysBrandTitle{
-      font-size:20px;
+      font-size:17px;
       line-height:1.1;
       color:#1f2a44;
       font-weight:1000;
@@ -822,14 +822,14 @@
     }
     .sysBrandIntro{
       display:grid;
-      grid-template-columns: 108px minmax(0,1fr);
-      gap:14px;
+      grid-template-columns: 84px minmax(0,1fr);
+      gap:10px;
       align-items:center;
     }
     .sysBrandPreview{
-      width:108px;
-      height:108px;
-      border-radius:24px;
+      width:84px;
+      height:84px;
+      border-radius:16px;
       border:1px solid rgba(18,28,65,.12);
       background:#f3f5f8;
       object-fit:cover;
@@ -838,7 +838,7 @@
     .sysBrandIntroText{
       margin:0;
       color:#1f2a44;
-      font-size:19px;
+      font-size:16px;
       line-height:1.25;
       font-weight:1000;
     }
@@ -855,9 +855,9 @@
     #systemModal .sysBrandActions .btnGhost{
       width:100%;
       justify-content:center;
-      min-height:48px;
-      border-radius:20px;
-      font-size:16px;
+      min-height:42px;
+      border-radius:14px;
+      font-size:15px;
       font-weight:1000;
       transition:transform .12s ease, box-shadow .12s ease, background-color .15s ease, border-color .15s ease;
     }
@@ -896,11 +896,11 @@
       box-shadow:none;
     }
     #companyNameInput{
-      font-size:20px;
+      font-size:17px;
       line-height:1.1;
       color:#1f2a44;
-      border-radius:22px;
-      padding:14px 18px;
+      border-radius:14px;
+      padding:11px 14px;
       font-weight:1000;
       text-transform:uppercase;
       letter-spacing:.3px;
@@ -914,7 +914,7 @@
       text-transform:none;
     }
     .sysBrandCard .hint{
-      font-size:14px;
+      font-size:12px;
       color:#1f2a44;
       font-weight:1000;
     }
@@ -940,23 +940,23 @@
         font-size:20px;
       }
       .sysBrandCard{
-        border-radius:18px;
-        padding:12px;
+        border-radius:14px;
+        padding:10px;
       }
       .sysBrandTitle{
-        font-size:18px;
+        font-size:15px;
       }
       .sysBrandIntro{
-        grid-template-columns:74px minmax(0,1fr);
-        gap:10px;
+        grid-template-columns:60px minmax(0,1fr);
+        gap:8px;
       }
       .sysBrandPreview{
-        width:74px;
-        height:74px;
-        border-radius:16px;
+        width:60px;
+        height:60px;
+        border-radius:12px;
       }
       .sysBrandIntroText{
-        font-size:16px;
+        font-size:14px;
       }
       .sysBrandActions{
         grid-template-columns:1fr;
@@ -966,17 +966,17 @@
       }
       #systemModal .sysBrandActions .btn,
       #systemModal .sysBrandActions .btnGhost{
-        min-height:44px;
-        border-radius:14px;
-        font-size:16px;
+        min-height:40px;
+        border-radius:12px;
+        font-size:14px;
       }
       #companyNameInput{
-        font-size:18px;
-        border-radius:16px;
-        padding:12px 14px;
+        font-size:15px;
+        border-radius:12px;
+        padding:10px 12px;
       }
       .sysBrandCard .hint{
-        font-size:13px;
+        font-size:11px;
       }
     }
     .sysCard{
