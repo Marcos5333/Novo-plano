@@ -22,7 +22,9 @@
         const get = (selector) => (n.querySelector(selector)?.textContent ?? "").trim();
         const name = get("nome");
         const rawCategory = (get("categoria") || "").trim();
-        const category = normalizeCategoryId(rawCategory);
+        const rawCategoryId = (get("categoria_id") || "").trim();
+        const category = normalizeCategoryId(rawCategoryId || rawCategory);
+        const subcat = normalizeSubcat(get("subcategoria"));
         const emoji = get("emoji") || (category === "pizzas" ? "🍕" : "🧾");
         const desc = get("descricao");
         const cozinhaTxt = (get("cozinha") || "").toLowerCase();
@@ -46,6 +48,7 @@
             id: uid(),
             name, category, emoji, desc,
             priceP: broto, priceM: normal,
+            ...(subcat ? { subcat } : {}),
             isKitchen
           });
         } else {
@@ -82,6 +85,159 @@
       }
       return out;
     }
+
+    function xmlEscape(value){
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
+    }
+
+    function exportMoney(value){
+      const n = Number(value);
+      const safe = Number.isFinite(n) ? Math.max(0, n) : 0;
+      return safe.toFixed(2);
+    }
+
+    function categoryLabelForExport(categoryId){
+      const id = String(categoryId || "").trim();
+      const cat = categories.find((c) => String(c?.id || "") === id);
+      if (cat?.label) return String(cat.label).trim();
+      return prettyCatLabel(id);
+    }
+
+    function buildMenuExportRows(){
+      return products
+        .map((p) => {
+          const categoryId = String(p?.category || "").trim();
+          if (!categoryId) return null;
+          const isPizza = categoryId === "pizzas";
+          const categoryLabel = categoryLabelForExport(categoryId);
+          const name = String(p?.name || "").trim();
+          if (!name) return null;
+
+          const row = {
+            nome: name,
+            categoria: categoryLabel,
+            categoria_id: categoryId,
+            subcategoria: String(p?.subcat || "").trim(),
+            emoji: String(p?.emoji || "").trim() || (isPizza ? "🍕" : "🧾"),
+            descricao: String(p?.desc || "").trim(),
+            cozinha: !!p?.isKitchen,
+          };
+
+          if (isPizza){
+            row.precos = {
+              broto: exportMoney(p?.priceP),
+              normal: exportMoney(p?.priceM),
+            };
+          } else {
+            row.preco = exportMoney(p?.price);
+          }
+
+          return row;
+        })
+        .filter(Boolean);
+    }
+
+    function buildMenuXml(rows){
+      const lines = [
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+        "<cardapio>"
+      ];
+
+      for (const row of rows){
+        lines.push("  <produto>");
+        lines.push(`    <nome>${xmlEscape(row.nome)}</nome>`);
+        lines.push(`    <categoria>${xmlEscape(row.categoria)}</categoria>`);
+        lines.push(`    <categoria_id>${xmlEscape(row.categoria_id)}</categoria_id>`);
+        if (row.subcategoria) lines.push(`    <subcategoria>${xmlEscape(row.subcategoria)}</subcategoria>`);
+        if (row.emoji) lines.push(`    <emoji>${xmlEscape(row.emoji)}</emoji>`);
+        if (row.descricao) lines.push(`    <descricao>${xmlEscape(row.descricao)}</descricao>`);
+        lines.push(`    <cozinha>${row.cozinha ? "true" : "false"}</cozinha>`);
+        if (row.precos){
+          lines.push("    <precos>");
+          lines.push(`      <broto>${xmlEscape(row.precos.broto)}</broto>`);
+          lines.push(`      <normal>${xmlEscape(row.precos.normal)}</normal>`);
+          lines.push("    </precos>");
+        } else {
+          lines.push(`    <preco>${xmlEscape(row.preco)}</preco>`);
+        }
+        lines.push("  </produto>");
+      }
+
+      lines.push("</cardapio>");
+      return lines.join("\n");
+    }
+
+    function buildMenuJson(rows){
+      const usedCategoryIds = new Set(rows.map((r) => r.categoria_id));
+      const exportedCategories = categories
+        .filter((c) => usedCategoryIds.has(String(c?.id || "").trim()))
+        .map((c) => ({
+          id: String(c?.id || "").trim(),
+          label: String(c?.label || "").trim(),
+          emoji: String(c?.emoji || "").trim() || "🏷️",
+        }));
+
+      return JSON.stringify({
+        schema: "mvs-cardapio-export-v1",
+        exported_at: new Date().toISOString(),
+        total_itens: rows.length,
+        categorias: exportedCategories,
+        produtos: rows,
+      }, null, 2);
+    }
+
+    function triggerFileDownload(content, mimeType, filename){
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    if (els.exportMenuBtn) els.exportMenuBtn.addEventListener("click", async () => {
+      if (!requireManager()) return;
+      try{
+        setButtonLoading(els.exportMenuBtn, true);
+        const rows = buildMenuExportRows();
+        if (!rows.length) throw new Error("Nenhum item válido no cardápio para exportar.");
+
+        const format = await openChoiceModal({
+          title: "Exportar cardápio",
+          message: `Exportar ${rows.length} itens em qual formato?`,
+          options: [
+            { value: "xml", label: "XML", className: "btn" },
+            { value: "json", label: "JSON", className: "btnGhost" },
+          ],
+          cancelText: "Cancelar",
+        });
+        if (!format) return;
+
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        const isXml = format === "xml";
+        const content = isXml ? buildMenuXml(rows) : buildMenuJson(rows);
+        const mimeType = isXml ? "application/xml; charset=utf-8" : "application/json; charset=utf-8";
+        const filename = isXml
+          ? `mvs_cardapio_${stamp}.xml`
+          : `mvs_cardapio_${stamp}.json`;
+
+        triggerFileDownload(content, mimeType, filename);
+        toast(`Cardápio exportado em ${isXml ? "XML" : "JSON"} ✅`, "success");
+        logEvent("info", "Cardápio exportado", `${isXml ? "XML" : "JSON"} (${rows.length} itens)`);
+      } catch (e){
+        toast("Falha ao exportar cardápio: " + e.message, "error", { detail: e?.stack || e?.message });
+      } finally {
+        setButtonLoading(els.exportMenuBtn, false);
+      }
+    });
 
     els.importXmlBtn.addEventListener("click", () => {
       if (!requireManager()) return;
@@ -139,6 +295,7 @@
     renderRole();
     updateBackupHint();
     scheduleAutoBackup();
+    scheduleAutoCashClose();
     lockSignaturePosition();
     removeSignatureBackground();
     if (window.__MVS_DEMO_STORAGE) {

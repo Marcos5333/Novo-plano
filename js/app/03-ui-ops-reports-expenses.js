@@ -1,6 +1,7 @@
 // ===== UI/DOM =====
     const els = {
       clock: document.getElementById("clock"),
+      mobileClock: document.getElementById("mobileClock"),
       systemBtn: document.getElementById("systemBtn"),
       addonManagerBtn: document.getElementById("addonManagerBtn"),
       systemModal: document.getElementById("systemModal"),
@@ -15,6 +16,10 @@
       rolePill: document.getElementById("rolePill"),
       roleText: document.getElementById("roleText"),
       roleDot: document.getElementById("roleDot"),
+      mobileMenuToggle: document.getElementById("mobileMenuToggle"),
+      mobileMenuClose: document.getElementById("mobileMenuClose"),
+      mobileMenuPanel: document.getElementById("mobileMenuPanel"),
+      mobileMenuBackdrop: document.getElementById("mobileMenuBackdrop"),
 
       managerPinInput: document.getElementById("managerPinInput"),
       managerPinInputLogin: document.getElementById("managerPinInputLogin"),
@@ -99,6 +104,7 @@
       productsTitle: document.getElementById("productsTitle"),
 
       importXmlBtn: document.getElementById("importXmlBtn"),
+      exportMenuBtn: document.getElementById("exportMenuBtn"),
       xmlFileInput: document.getElementById("xmlFileInput"),
 
       cartItems: document.getElementById("cartItems"),
@@ -269,7 +275,8 @@
       const d = new Date();
       const hh = String(d.getHours()).padStart(2,"0");
       const mm = String(d.getMinutes()).padStart(2,"0");
-      els.clock.textContent = `${hh}:${mm}`;
+      if (els.clock) els.clock.textContent = `${hh}:${mm}`;
+      if (els.mobileClock) els.mobileClock.textContent = `${hh}:${mm}`;
     }
     tickClock(); setInterval(tickClock, 1000);
 
@@ -1052,12 +1059,13 @@
     function renderExpensesSummary(data){
       if (!els.expensesSummary) return;
       const totals = data?.totals || {};
+      const totalEntries = Number((data?.total_entries ?? data?.cash_sales) || 0);
       const cards = [
         { label: "Abertura", value: Number(totals.abertura || 0) },
         { label: "Sangria", value: Number(totals.sangria || 0) },
         { label: "Despesas", value: Number(totals.despesa || 0) },
         { label: "Pagamento funcionário", value: Number(totals.pagamento_funcionario || 0) },
-        { label: "Vendas em dinheiro", value: Number(data?.cash_sales || 0) },
+        { label: "Entradas (todas formas)", value: totalEntries },
         { label: "Saldo esperado", value: Number(data?.projected_cash || 0) },
       ];
 
@@ -1093,6 +1101,7 @@
             const when = fmtDateTime(row?.created_at);
             const canEdit = row?.can_edit !== false;
             const canDelete = row?.can_delete !== false;
+            const deleteLabel = String(row?.entity_type || "") === "order" ? "Cancelar venda" : "Excluir";
             return `
               <div class="expenseRow">
                 <div>
@@ -1106,7 +1115,7 @@
                       <summary class="miniBtn" title="Ações">▾</summary>
                       <div class="expenseMenuList">
                         ${canEdit ? `<button class="miniBtn" type="button" data-launch-action="edit" data-launch-id="${escapeAttr(row.__row_id)}">Editar</button>` : ""}
-                        ${canDelete ? `<button class="miniBtn danger" type="button" data-launch-action="delete" data-launch-id="${escapeAttr(row.__row_id)}">Excluir</button>` : ""}
+                        ${canDelete ? `<button class="miniBtn danger" type="button" data-launch-action="delete" data-launch-id="${escapeAttr(row.__row_id)}">${escapeHtml(deleteLabel)}</button>` : ""}
                       </div>
                     </details>
                   ` : ""}
@@ -1223,10 +1232,13 @@
         return;
       }
 
-      const paymentInput = await safePrompt("Pagamento (dinheiro/pix/debito/credito/pedido_pago):", String(order?.payment_method || "dinheiro"));
+      const paymentInput = await safePrompt("Pagamento (dinheiro/pix/debito/credito/pedido_pago/pedido_pago_ifood):", String(order?.payment_method || "dinheiro"));
       if (paymentInput === null) return;
-      const payment = String(paymentInput || "").trim().toLowerCase();
-      if (!["dinheiro", "pix", "debito", "credito", "pedido_pago"].includes(payment)){
+      const payment = String(paymentInput || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, "_");
+      if (!["dinheiro", "pix", "debito", "credito", "pedido_pago", "pedido_pago_ifood"].includes(payment)){
         toast("Pagamento inválido.", "error");
         return;
       }
@@ -1278,7 +1290,7 @@
       const resp = await fetch(`/api/orders/${orderId}/cancel`, { method: "POST" });
       const data = await resp.json().catch(() => null);
       if (!resp.ok || data?.ok === false){
-        throw new Error(data?.error || "Erro ao excluir venda");
+        throw new Error(data?.error || "Erro ao cancelar venda");
       }
     }
 
@@ -1298,9 +1310,12 @@
       }
 
       if (action === "delete"){
+        const isOrder = type === "order";
         const ok = await openConfirmModal({
-          title: "Excluir lançamento",
-          message: "Confirmar exclusão deste lançamento?"
+          title: isOrder ? "Cancelar venda" : "Excluir lançamento",
+          message: isOrder
+            ? "Cancelar esta venda? Essa ação não remove itens do histórico."
+            : "Confirmar exclusão deste lançamento?"
         });
         if (!ok) return;
         if (type === "movement") {
@@ -1422,7 +1437,7 @@
         if (action === "edit"){
           toast("Lançamento atualizado.", "success");
         } else if (action === "delete"){
-          toast("Lançamento excluído.", "success");
+          toast(row?.entity_type === "order" ? "Venda cancelada." : "Lançamento excluído.", "success");
         }
       } catch (err){
         toast("Falha ao processar lançamento: " + err.message, "error", { detail: err?.stack || err?.message });

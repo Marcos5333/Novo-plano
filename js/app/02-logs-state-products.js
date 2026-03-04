@@ -171,11 +171,9 @@
 
     function updateSystemLock(){
       const cards = document.querySelectorAll("#systemModal .sysCard");
-      const locked = !isManager();
-      cards.forEach((card, idx) => {
-        if (idx === 0) return; // keep Access card enabled
-        card.classList.toggle("locked", locked);
-        card.style.pointerEvents = locked ? "none" : "auto";
+      cards.forEach((card) => {
+        card.classList.remove("locked");
+        card.style.pointerEvents = "auto";
       });
     }
 

@@ -187,6 +187,7 @@
     debito: "Débito",
     credito: "Crédito",
     pedido_pago: "Pedido Pago",
+    pedido_pago_ifood: "Pedido Pago iFood",
   });
 
   function paymentMethodLabel(method){

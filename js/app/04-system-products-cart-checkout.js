@@ -118,6 +118,92 @@
       }, delay);
     }
 
+    const AUTO_CASH_CLOSE_MARK_KEY = "mvs_auto_cash_close_mark_v1";
+
+    function getAutoCashCloseMark(){
+      try{
+        return String(localStorage.getItem(AUTO_CASH_CLOSE_MARK_KEY) || "");
+      } catch {
+        return "";
+      }
+    }
+
+    function setAutoCashCloseMark(day){
+      try{
+        localStorage.setItem(AUTO_CASH_CLOSE_MARK_KEY, String(day || ""));
+      } catch {
+        // ignore storage failures
+      }
+    }
+
+    async function runAutoCashCloseNow(){
+      try{
+        const statusResp = await fetch("/api/cash/status");
+        const statusData = await statusResp.json().catch(() => null);
+        if (!statusResp.ok || statusData?.ok === false){
+          throw new Error(statusData?.error || "Erro ao consultar status do caixa");
+        }
+        const isOpen = String(statusData?.cash_status || "").toUpperCase() === "ABERTO";
+        if (!isOpen){
+          return { ok: true, closed: false };
+        }
+
+        const closeResp = await fetch("/api/cash/close", { method: "POST" });
+        const closeData = await closeResp.json().catch(() => null);
+        if (!closeResp.ok || closeData?.ok === false){
+          throw new Error(closeData?.error || "Erro ao fechar caixa automaticamente");
+        }
+
+        syncCashFromServer();
+        loadDiagnostics();
+        if (typeof loadExpensesData === "function"){
+          loadExpensesData({ silent: true });
+        }
+        logEvent("info", "Fechamento automático do caixa", "Executado às 00:50");
+        toast("Caixa fechado automaticamente (00:50).", "success");
+        return { ok: true, closed: true };
+      } catch (e){
+        logEvent("error", "Falha no fechamento automático do caixa", e?.message || String(e));
+        return { ok: false, closed: false, error: e };
+      }
+    }
+
+    async function runDailyAutoCashCloseIfDue(){
+      const now = new Date();
+      const today = localDateISO(now);
+      const targetToday = new Date(now);
+      targetToday.setHours(0, 50, 0, 0);
+
+      if (now < targetToday) return;
+      if (getAutoCashCloseMark() === today) return;
+
+      const result = await runAutoCashCloseNow();
+      if (result?.ok){
+        setAutoCashCloseMark(today);
+      }
+    }
+
+    function scheduleAutoCashClose(){
+      runDailyAutoCashCloseIfDue();
+
+      const now = new Date();
+      const target = new Date(now);
+      target.setHours(0, 50, 0, 0);
+      if (now >= target){
+        target.setDate(target.getDate() + 1);
+      }
+
+      const delay = Math.max(1000, target.getTime() - now.getTime());
+      setTimeout(async () => {
+        await runAutoCashCloseNow().then((result) => {
+          if (result?.ok){
+            setAutoCashCloseMark(localDateISO(new Date()));
+          }
+        });
+        scheduleAutoCashClose();
+      }, delay);
+    }
+
     async function restoreAutoBackup(daysAgo = 1){
       if (!DEMO_STORAGE_MODE) return;
       const d = new Date();
@@ -412,6 +498,21 @@
       els.systemModal.style.display = "flex";
     }
 
+    function openManagerLoginModal(){
+      if (!els.managerLoginModal) return;
+      closeOtherModals();
+      applyRoleLocks();
+      if (els.managerPinInputLogin) els.managerPinInputLogin.value = "";
+      els.managerLoginModal.style.display = "flex";
+      setTimeout(() => {
+        if (isManager()){
+          els.managerNewPinInput?.focus();
+        } else {
+          els.managerPinInputLogin?.focus();
+        }
+      }, 0);
+    }
+
     function openAddonManager(){
       if (!els.addonModal) return;
       closeOtherModals();
@@ -426,6 +527,39 @@
       setTimeout(() => els.addonCategorySelect?.focus(), 0);
     }
 
+    const mobileMenuMedia = window.matchMedia("(max-width: 900px)");
+
+    function syncMobileMenuA11yState(isOpen){
+      if (els.mobileMenuToggle){
+        els.mobileMenuToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      }
+      if (els.mobileMenuPanel){
+        els.mobileMenuPanel.setAttribute("aria-hidden", isOpen ? "false" : "true");
+      }
+      if (els.mobileMenuBackdrop){
+        els.mobileMenuBackdrop.setAttribute("aria-hidden", isOpen ? "false" : "true");
+      }
+    }
+
+    function closeMobileMenu(){
+      document.body.classList.remove("mobile-menu-open");
+      syncMobileMenuA11yState(false);
+    }
+
+    function openMobileMenu(){
+      if (!mobileMenuMedia.matches) return;
+      document.body.classList.add("mobile-menu-open");
+      syncMobileMenuA11yState(true);
+    }
+
+    function toggleMobileMenu(){
+      if (document.body.classList.contains("mobile-menu-open")){
+        closeMobileMenu();
+      } else {
+        openMobileMenu();
+      }
+    }
+
     function closeAddonManager(){
       if (els.addonModal) els.addonModal.style.display = "none";
       closeAddonEditModal();
@@ -438,6 +572,28 @@
     function closeManagerLoginModal(){
       if (els.managerLoginModal) els.managerLoginModal.style.display = "none";
     }
+
+    if (els.mobileMenuToggle) els.mobileMenuToggle.addEventListener("click", toggleMobileMenu);
+    if (els.mobileMenuClose) els.mobileMenuClose.addEventListener("click", closeMobileMenu);
+    if (els.mobileMenuBackdrop) els.mobileMenuBackdrop.addEventListener("click", closeMobileMenu);
+    if (els.mobileMenuPanel) els.mobileMenuPanel.addEventListener("click", (e) => {
+      const actionTarget = e.target.closest("button, .pill");
+      if (!actionTarget) return;
+      if (actionTarget.id === "mobileMenuClose" || actionTarget.id === "mobileMenuToggle") return;
+      if (mobileMenuMedia.matches){
+        setTimeout(closeMobileMenu, 0);
+      }
+    });
+    if (mobileMenuMedia?.addEventListener){
+      mobileMenuMedia.addEventListener("change", (ev) => {
+        if (!ev.matches) closeMobileMenu();
+      });
+    } else if (mobileMenuMedia?.addListener){
+      mobileMenuMedia.addListener((ev) => {
+        if (!ev.matches) closeMobileMenu();
+      });
+    }
+    closeMobileMenu();
 
     if (els.systemBtn) els.systemBtn.addEventListener("click", openSystemModal);
     if (els.addonManagerBtn) els.addonManagerBtn.addEventListener("click", openAddonManager);
@@ -456,9 +612,7 @@
     if (els.addonEditModal) els.addonEditModal.addEventListener("click", (e) => {
       if (e.target === els.addonEditModal) closeAddonEditModal();
     });
-    if (els.rolePill) els.rolePill.addEventListener("click", () => {
-      openSystemModal();
-    });
+    if (els.rolePill) els.rolePill.addEventListener("click", openManagerLoginModal);
 
     if (els.managerLoginClose) els.managerLoginClose.addEventListener("click", closeManagerLoginModal);
     if (els.managerLoginModal) els.managerLoginModal.addEventListener("click", (e) => {
@@ -493,7 +647,6 @@
       toast("Modo gerente ativado.", "success");
       if (els.managerPinInputLogin) els.managerPinInputLogin.value = "";
       closeManagerLoginModal();
-      openSystemModal();
     });
     if (els.managerPinInput) els.managerPinInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") els.managerLoginBtn?.click();
@@ -505,6 +658,8 @@
     if (els.managerLogoutBtn) els.managerLogoutBtn.addEventListener("click", () => {
       setRole("operador");
       toast("Modo operador ativado.", "info");
+      if (els.managerPinInputLogin) els.managerPinInputLogin.value = "";
+      if (els.managerNewPinInput) els.managerNewPinInput.value = "";
     });
 
     if (els.managerSetPinBtn) els.managerSetPinBtn.addEventListener("click", () => {
@@ -746,6 +901,44 @@
       }
       return qty;
     }
+
+    // Trava o scroll da página de fundo enquanto qualquer modal estiver aberto.
+    let modalLockScrollY = 0;
+    function syncModalScrollLock(){
+      const hasOpenModal = Array.from(document.querySelectorAll(".modalOverlay"))
+        .some((el) => {
+          try{
+            return window.getComputedStyle(el).display !== "none";
+          } catch {
+            return false;
+          }
+        });
+
+      if (hasOpenModal){
+        if (!document.body.classList.contains("modal-open")){
+          modalLockScrollY = window.scrollY || window.pageYOffset || 0;
+          document.body.style.top = `-${modalLockScrollY}px`;
+          document.body.classList.add("modal-open");
+        }
+        return;
+      }
+
+      if (document.body.classList.contains("modal-open")){
+        document.body.classList.remove("modal-open");
+        document.body.style.top = "";
+        window.scrollTo(0, modalLockScrollY);
+      }
+    }
+
+    const modalScrollObserver = new MutationObserver(() => {
+      syncModalScrollLock();
+    });
+    modalScrollObserver.observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["style", "class"]
+    });
+    syncModalScrollLock();
 
     function updateMobileCartFab(totals){
       if (!els.mobileCartFab || !els.mobileCartFabCount || !els.mobileCartFabTotal) return;
@@ -1538,7 +1731,7 @@
       return roundMoney(value).toFixed(2).replace(".", ",");
     }
 
-    const PAYMENT_METHOD_VALUES = Object.freeze(["dinheiro", "pix", "debito", "credito", "pedido_pago"]);
+    const PAYMENT_METHOD_VALUES = Object.freeze(["dinheiro", "pix", "debito", "credito", "pedido_pago", "pedido_pago_ifood"]);
     const PAYMENT_METHOD_SET = new Set(PAYMENT_METHOD_VALUES);
 
     function buildPaymentMethodOptions(selected){
@@ -1853,6 +2046,7 @@
     }
 
     function closeOtherModals(){
+      closeMobileMenu();
       if (els.productModal) els.productModal.style.display = "none";
       if (els.pizzaModal) els.pizzaModal.style.display = "none";
       if (els.itemModal) closeRegularItemModal();
@@ -2227,6 +2421,10 @@
     });
 
     function closeAnyModal(){
+      if (document.body.classList.contains("mobile-menu-open")){
+        closeMobileMenu();
+        return true;
+      }
       if (els.promptModal && els.promptModal.style.display === "flex"){
         closePromptModal(null);
         return true;
@@ -2588,7 +2786,9 @@
         const openedAt = data?.opened_at ? fmtDateTime(data.opened_at) : "-";
         const lastClosedAt = data?.last_closed_at ? fmtDateTime(data.last_closed_at) : "-";
         const openAmount = brl(Number(data?.opening_amount || 0));
-        const cashSales = brl(Number(data?.cash_sales || 0));
+        const totalEntries = brl(Number((data?.total_entries ?? data?.cash_sales) || 0));
+        const moneySalesRaw = Number(data?.money_sales);
+        const moneySales = Number.isFinite(moneySalesRaw) ? brl(moneySalesRaw) : "";
         const cashOut = brl(Number(data?.cash_out || 0));
         const projectedCash = brl(Number(data?.projected_cash || 0));
 
@@ -2599,7 +2799,8 @@
           `Status: ${isOpen ? "ABERTO" : "FECHADO"}`,
           (isOpen ? `Aberto em: ${openedAt}` : `Último fechamento: ${lastClosedAt}`),
           `Abertura atual: ${openAmount}`,
-          `Vendas do dia: ${cashSales}`,
+          `Entradas do dia: ${totalEntries}`,
+          ...(moneySales ? [`Dinheiro no dia: ${moneySales}`] : []),
           `Saídas (sangria/despesas): ${cashOut}`,
           `Saldo esperado: ${projectedCash}`,
         ].join("\n");

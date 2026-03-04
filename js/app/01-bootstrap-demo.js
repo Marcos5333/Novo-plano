@@ -188,6 +188,7 @@
         if (pm.includes("pix")) return "pix";
         if (pm.includes("deb")) return "debito";
         if (pm.includes("cre")) return "credito";
+        if (pm.includes("pedido_pago_ifood") || pm.includes("pedido pago ifood") || pm.includes("pedido pago i-food")) return "pedido_pago_ifood";
         if (pm.includes("pedido_pago") || pm.includes("pedido pago")) return "pedido_pago";
         return "outros";
       }
@@ -319,7 +320,7 @@
           }))
           .sort((a, b) => a.id - b.id);
 
-        const byPay = { dinheiro: 0, pix: 0, debito: 0, credito: 0, pedido_pago: 0, outros: 0 };
+        const byPay = { dinheiro: 0, pix: 0, debito: 0, credito: 0, pedido_pago: 0, pedido_pago_ifood: 0, outros: 0 };
         let totalGeral = 0;
         for (const row of rows){
           const t = Number(row.total || 0);
@@ -343,14 +344,16 @@
         }
         const movementTotals = demoSumCashMovementsBetween(db, startIso, endIso);
         const openingAmount = roundMoney(movementTotals.byKind?.abertura || 0);
+        const totalIn = roundMoney(totalGeral || 0);
         const moneySales = roundMoney(byPay.dinheiro || 0);
         const totalOut = roundMoney(movementTotals.totalOut || 0);
-        const projectedCash = roundMoney(openingAmount + moneySales - totalOut);
+        const projectedCash = roundMoney(openingAmount + totalIn - totalOut);
 
         return {
           rows,
           byPay,
           totalGeral,
+          totalIn,
           moneySales,
           openingAmount,
           byExpense: {
@@ -577,6 +580,7 @@ ${bodyHtml}
         const totalOut = roundMoney(report.totalOut || 0);
         const netRevenue = roundMoney(totalSales - totalOut);
         const openingAmount = roundMoney(report.openingAmount || 0);
+        const totalEntries = roundMoney((report.totalIn ?? report.totalGeral) || 0);
         const moneySales = roundMoney(report.moneySales || 0);
         const projectedCash = roundMoney(report.projectedCash || 0);
         const expenseTotals = report.byExpense || {};
@@ -652,6 +656,7 @@ ${bodyHtml}
             <div>Debito: ${escapeHtml(brl(paymentTotals.debito || 0))}</div>
             <div>Credito: ${escapeHtml(brl(paymentTotals.credito || 0))}</div>
             <div>Pedido Pago: ${escapeHtml(brl(paymentTotals.pedido_pago || 0))}</div>
+            <div>Pedido Pago iFood: ${escapeHtml(brl(paymentTotals.pedido_pago_ifood || 0))}</div>
             <div>Outros: ${escapeHtml(brl(paymentTotals.outros || 0))}</div>
           </div>
         `;
@@ -659,7 +664,8 @@ ${bodyHtml}
         const cashSection = showCashBreakdown ? `
           <div class="box">
             <div><b>Aberturas no periodo:</b> ${escapeHtml(brl(openingAmount))}</div>
-            <div><b>Vendas em dinheiro:</b> ${escapeHtml(brl(moneySales))}</div>
+            <div><b>Entradas (todas formas):</b> ${escapeHtml(brl(totalEntries))}</div>
+            <div><b>Somente dinheiro:</b> ${escapeHtml(brl(moneySales))}</div>
             <div><b>Sangria:</b> ${escapeHtml(brl(expenseTotals.sangria || 0))}</div>
             <div><b>Despesas:</b> ${escapeHtml(brl(expenseTotals.despesa || 0))}</div>
             <div><b>Pagamento funcionario:</b> ${escapeHtml(brl(expenseTotals.pagamento_funcionario || 0))}</div>
@@ -843,6 +849,8 @@ ${bodyHtml}
               last_closed_at: db.meta.cash_last_closed_at,
               projected_cash: 0,
               cash_sales: 0,
+              money_sales: 0,
+              total_entries: 0,
               cash_out: 0,
             });
           }
@@ -850,6 +858,8 @@ ${bodyHtml}
           const shiftStart = db.meta.cash_opened_at || new Date(0).toISOString();
           const shiftEnd = demoNowIso();
           const report = demoSumOrdersBetween(db, shiftStart, shiftEnd);
+          const totalEntries = roundMoney((report.totalIn ?? report.totalGeral) || 0);
+          const moneySales = roundMoney(report.moneySales || 0);
           return demoJson({
             ok: true,
             cash_status: db.meta.cash_status,
@@ -857,7 +867,9 @@ ${bodyHtml}
             opening_amount: roundMoney(report.openingAmount || 0),
             last_closed_at: db.meta.cash_last_closed_at,
             projected_cash: report.projectedCash || 0,
-            cash_sales: report.moneySales || 0,
+            cash_sales: totalEntries,
+            money_sales: moneySales,
+            total_entries: totalEntries,
             cash_out: report.totalOut || 0,
           });
         }
@@ -877,6 +889,8 @@ ${bodyHtml}
             opening_amount: 0,
             projected_cash: 0,
             cash_sales: 0,
+            money_sales: 0,
+            total_entries: 0,
             cash_out: 0,
           });
         }
@@ -924,7 +938,9 @@ ${bodyHtml}
             summary: {
               total: roundMoney(report.totalGeral || 0),
               opening_amount: roundMoney(report.openingAmount || 0),
-              cash_sales: roundMoney(report.moneySales || 0),
+              cash_sales: roundMoney((report.totalIn ?? report.totalGeral) || 0),
+              money_sales: roundMoney(report.moneySales || 0),
+              total_entries: roundMoney((report.totalIn ?? report.totalGeral) || 0),
               cash_out: roundMoney(report.totalOut || 0),
               projected_cash: roundMoney(report.projectedCash || 0),
               count: Number(report.rows?.length || 0),
@@ -946,7 +962,9 @@ ${bodyHtml}
             byPay: report.byPay,
             count: report.rows.length,
             opening_amount: report.openingAmount,
-            cash_sales: report.moneySales,
+            cash_sales: (report.totalIn ?? report.totalGeral),
+            money_sales: report.moneySales,
+            total_entries: (report.totalIn ?? report.totalGeral),
             cash_out: report.totalOut,
             projected_cash: report.projectedCash,
             saved_day: day
@@ -1029,6 +1047,8 @@ ${bodyHtml}
                   total_saidas: 0,
                 },
                 cash_sales: 0,
+                money_sales: 0,
+                total_entries: 0,
                 projected_cash: 0,
                 saved_day: db.meta.cash_last_closed_at ? demoDayKeyFromIso(db.meta.cash_last_closed_at) : "",
               });
@@ -1093,7 +1113,9 @@ ${bodyHtml}
                 pagamento_funcionario: report.byExpense?.pagamento_funcionario || 0,
                 total_saidas: report.totalOut || 0,
               },
-              cash_sales: report.moneySales || 0,
+              cash_sales: (report.totalIn ?? report.totalGeral) || 0,
+              money_sales: report.moneySales || 0,
+              total_entries: (report.totalIn ?? report.totalGeral) || 0,
               projected_cash: report.projectedCash || 0,
             });
           }

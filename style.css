@@ -107,6 +107,40 @@
       gap:8px;
       justify-items:end;
     }
+    .mobileMenuBtn{
+      display:none;
+      border:1px solid rgba(37,99,235,.28);
+      background: linear-gradient(135deg, #2563eb, #3b82f6);
+      color:#fff;
+      border-radius:10px;
+      padding:8px 12px;
+      font-weight:900;
+      font-size:12px;
+      letter-spacing:.2px;
+      box-shadow: 0 10px 20px rgba(37,99,235,.24);
+      cursor:pointer;
+    }
+    .mobileQuickBar{
+      display:none;
+    }
+    .mobileClockPill{
+      display:none;
+    }
+    .mobileMenuHead{
+      display:none;
+    }
+    .mobileMenuClose{
+      border:1px solid rgba(18,28,65,.16);
+      background:#fff;
+      color:#1f2a44;
+      border-radius:10px;
+      padding:6px 10px;
+      font-weight:900;
+      cursor:pointer;
+    }
+    .mobileMenuBackdrop{
+      display:none;
+    }
     .rt-row{
       display:flex;
       align-items:center;
@@ -470,6 +504,15 @@
       color:#2a1c59;
       font-size:12px;
     }
+    .cartTotalTag{
+      padding:8px 10px;
+      border-radius:999px;
+      font-weight:1000;
+      font-size:12px;
+      letter-spacing:.2px;
+      white-space:nowrap;
+      align-self:center;
+    }
     .cartItems{
       display:grid; gap:10px;
     }
@@ -832,6 +875,9 @@
     #systemModal .btnGhost{
       font-weight:700;
     }
+    #backupRestoreBtn{
+      margin-top:6px;
+    }
     .catEditor{
       display:grid;
       gap:10px;
@@ -932,6 +978,8 @@
       padding:18px;
       z-index:999;
       overflow-y:auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
     }
     #confirmModal,
     #choiceModal,
@@ -948,6 +996,7 @@
       position:relative;
       overflow:hidden;
       max-height: calc(100vh - 36px);
+      max-height: calc(100dvh - 36px);
     }
     .modalCompact{
       width:min(560px, 100%);
@@ -1039,7 +1088,11 @@
       display:grid;
       gap:12px;
       max-height: calc(100vh - 140px);
+      max-height: calc(100dvh - 140px);
       overflow-y:auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      scroll-padding-bottom: 96px;
     }
     .formGrid{
       display:grid;
@@ -1919,6 +1972,7 @@
         width:100%;
         border-radius:10px;
         max-height:calc(100vh - 20px);
+        max-height:calc(100dvh - 20px);
       }
       .modalHeader{
         padding:12px;
@@ -1926,14 +1980,16 @@
       .modalBody{
         padding:12px;
         max-height:calc(100vh - 126px);
+        max-height:calc(100dvh - 126px);
+        padding-bottom:calc(18px + env(safe-area-inset-bottom));
       }
       .modalFooter{
         padding:12px;
         flex-wrap:wrap;
-        position:sticky;
-        bottom:0;
-        z-index:2;
-        background: linear-gradient(180deg, rgba(255,255,255,.90), #fff 28%);
+        position:static;
+        bottom:auto;
+        z-index:auto;
+        background:transparent;
       }
       .modalFooter .btn,
       .modalFooter .btnGhost{
@@ -2001,6 +2057,26 @@
       .search input{
         font-size:13px;
       }
+      .footerShortcuts{
+        display:none;
+      }
+      .orderMeta{
+        display:grid;
+        grid-template-columns:repeat(4, minmax(0, 1fr));
+        gap:6px;
+      }
+      .meta{
+        padding:6px 8px;
+        font-size:11px;
+        text-align:center;
+      }
+      .cartTotalTag{
+        width:100%;
+        justify-content:center;
+        padding:6px 8px;
+        font-size:11px;
+        border-radius:999px;
+      }
       .paymentSplitToggleLine{
         min-width:0;
         width:100%;
@@ -2046,10 +2122,13 @@
     /* ===== Carrinho flutuante (mobile) ===== */
     .mobileCartFab{
       position:fixed;
-      left:50%;
+      left:auto;
+      right:12px;
       bottom:calc(10px + env(safe-area-inset-bottom));
-      transform:translate(-50%, 14px);
-      width:min(460px, calc(100% - 20px));
+      transform:translate(0, 14px);
+      width:auto;
+      min-width:132px;
+      max-width:min(188px, calc(100% - 24px));
       border:1px solid rgba(37,99,235,.35);
       border-radius:999px;
       background: linear-gradient(135deg, #2563eb, #3b82f6);
@@ -2057,9 +2136,9 @@
       box-shadow: 0 16px 30px rgba(37,99,235,.30);
       display:none;
       align-items:center;
-      justify-content:center;
-      gap:10px;
-      padding:12px 16px;
+      justify-content:flex-start;
+      gap:6px;
+      padding:8px 11px;
       cursor:pointer;
       opacity:0;
       pointer-events:none;
@@ -2069,22 +2148,22 @@
     .mobileCartFab.is-visible{
       opacity:1;
       pointer-events:auto;
-      transform:translate(-50%, 0);
+      transform:translate(0, 0);
     }
     .mobileCartFab.is-empty{
-      background: linear-gradient(135deg, #1f2a44, #334155);
-      border-color: rgba(148,163,184,.40);
-      box-shadow: 0 14px 26px rgba(15,23,42,.26);
+      background: linear-gradient(135deg, #2563eb, #3b82f6);
+      border-color: rgba(37,99,235,.35);
+      box-shadow: 0 16px 30px rgba(37,99,235,.30);
     }
     .mobileCartFabIcon{
-      width:34px;
-      height:34px;
-      border-radius:999px;
+      width:28px;
+      height:28px;
+      border-radius:50%;
       display:grid;
       place-items:center;
       background: rgba(255,255,255,.22);
       border:1px solid rgba(255,255,255,.35);
-      font-size:18px;
+      font-size:14px;
       flex:0 0 auto;
     }
     .mobileCartFabText{
@@ -2096,18 +2175,92 @@
     }
     .mobileCartFabText b{
       line-height:1;
-      font-size:14px;
+      font-size:11px;
       letter-spacing:.15px;
       font-weight:1000;
     }
     .mobileCartFabText small{
       opacity:.95;
-      font-size:11px;
+      font-size:9px;
       line-height:1.1;
       letter-spacing:.2px;
       font-weight:900;
     }
     @media (max-width: 900px){
+      .mobileQuickBar{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:10px;
+        margin-bottom:10px;
+      }
+      .mobileClockPill{
+        display:flex;
+        align-items:center;
+        gap:8px;
+        padding:8px 12px;
+        border-radius:10px;
+        border:1px solid rgba(37,99,235,.18);
+        background:#fff;
+        color:#1f2a44;
+        box-shadow: var(--shadow2);
+        font-weight:900;
+        font-size:12px;
+      }
+      .mobileMenuBtn{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+      }
+      .mobileMenuBackdrop{
+        position:fixed;
+        inset:0;
+        background: rgba(15,23,42,.55);
+        z-index:850;
+        opacity:0;
+        pointer-events:none;
+        transition:opacity .2s ease;
+      }
+      .mobileMenuHead{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        width:100%;
+        margin-bottom:4px;
+      }
+      .right-tools{
+        position:fixed;
+        top:0;
+        right:0;
+        width:min(360px, 90vw);
+        height:100dvh;
+        max-height:100dvh;
+        overflow-y:auto;
+        padding:14px;
+        background:#ffffff;
+        border-left:1px solid rgba(37,99,235,.18);
+        box-shadow: -14px 0 30px rgba(15,23,42,.24);
+        transform:translateX(102%);
+        transition:transform .24s ease;
+        z-index:900;
+      }
+      .rt-row{
+        width:100%;
+        justify-content:stretch;
+      }
+      .rt-row .pill,
+      .rt-row .btn{
+        width:100%;
+        justify-content:center;
+      }
+      body.mobile-menu-open .right-tools{
+        transform:translateX(0);
+      }
+      body.mobile-menu-open .mobileMenuBackdrop{
+        display:block;
+        opacity:1;
+        pointer-events:auto;
+      }
       .mobileCartFab{
         display:flex;
       }
@@ -2120,6 +2273,18 @@
     }
     @media (max-width: 420px){
       .mobileCartFab{
-        width:calc(100% - 16px);
+        right:8px;
+        max-width:min(176px, calc(100% - 16px));
       }
+    }
+
+    body.modal-open{
+      position:fixed;
+      width:100%;
+      overflow:hidden;
+      overscroll-behavior:none;
+    }
+    body.mobile-menu-open{
+      overflow:hidden;
+      overscroll-behavior:none;
     }

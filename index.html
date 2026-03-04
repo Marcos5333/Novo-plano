@@ -15,11 +15,14 @@
         <div class="logoImg" aria-hidden="true">MVS</div>
         <div>
           <h1>MVS TECHSOLUTION</h1>
-          
         </div>
       </div>
 
-      <div class="right-tools">
+      <div class="right-tools" id="mobileMenuPanel" aria-hidden="true">
+        <div class="mobileMenuHead">
+          <b>Menu rápido</b>
+          <button class="mobileMenuClose" type="button" id="mobileMenuClose" aria-label="Fechar menu">✖</button>
+        </div>
         <div class="rt-row rt-top">
           <button class="pill" type="button" id="opsTablesBtn">🍽️ Mesas</button>
           <button class="pill" type="button" id="opsKitchenBtn">👨‍🍳 Cozinha</button>
@@ -35,7 +38,6 @@
             <span class="dot" id="roleDot"></span>
             <span id="roleText">Modo: Operador</span>
           </button>
-          <div class="pill">🕒 <span id="clock">--:--</span></div>
         </div>
         <div class="rt-row rt-bottom">
           <button class="btn slimBtn" type="button" id="newProductBtn" data-role-only="manager">
@@ -56,6 +58,13 @@
         </div>
       </div>
     </header>
+    <div class="mobileQuickBar">
+      <div class="mobileClockPill">🕒 <span id="mobileClock">--:--</span></div>
+      <button class="mobileMenuBtn" type="button" id="mobileMenuToggle" aria-expanded="false" aria-controls="mobileMenuPanel">
+        ☰ Menu
+      </button>
+    </div>
+    <div class="mobileMenuBackdrop" id="mobileMenuBackdrop" aria-hidden="true"></div>
 
     <main class="grid">
       <!-- ESQUERDA: Produtos -->
@@ -90,9 +99,9 @@
                 <div class="meta" id="metaType">Entrega</div>
                 <div class="meta">Comanda</div>
                 <div class="meta" id="metaPay">Pagamento</div>
+                <div class="tag cartTotalTag">🧾 Total</div>
               </div>
             </div>
-            <div class="tag">🧾 Total</div>
           </div>
 
           <div class="cartItems" id="cartItems">
@@ -345,6 +354,7 @@
                 <option value="debito">Débito</option>
                 <option value="credito">Crédito</option>
                 <option value="pedido_pago">Pedido Pago</option>
+                <option value="pedido_pago_ifood">Pedido Pago iFood</option>
               </select>
             </div>
 
@@ -628,24 +638,6 @@
 
       <div class="modalBody">
         <div class="sysGrid">
-          <div class="sysCard">
-            <div class="sysTitle">Acesso</div>
-            <div class="field">
-              <label>PIN do gerente</label>
-              <input id="managerPinInput" type="password" placeholder="Digite o PIN" />
-            </div>
-            <div class="formGrid">
-              <button class="btn" type="button" id="managerLoginBtn">Entrar como gerente</button>
-              <button class="btnGhost" type="button" id="managerLogoutBtn">Sair para operador</button>
-            </div>
-            <div class="field">
-              <label>Novo PIN (mín. 4)</label>
-              <input id="managerNewPinInput" type="password" placeholder="Definir novo PIN" />
-            </div>
-            <button class="btnGhost" type="button" id="managerSetPinBtn" data-role-only="manager">Alterar PIN</button>
-            <div class="hint">Dica: o PIN padrão é 1234 (troque no primeiro uso).</div>
-          </div>
-
           <div class="sysCard compact">
             <div class="sysTitle">Backup</div>
             <div class="formGrid">
@@ -657,7 +649,7 @@
             <div class="field">
               <label>Backup automático diário</label>
               <div class="switchRow">
-                <input type="checkbox" id="autoBackupToggle" />
+                <input type="checkbox" id="autoBackupToggle" data-role-only="manager" />
                 <span>Ativar backup automático (23:50)</span>
               </div>
             </div>
@@ -666,9 +658,14 @@
                 <label>IMPORTAR CARDAPIO</label>
                 <button class="btnGhost" type="button" id="importXmlBtn" data-role-only="manager">Importar XML</button>
               </div>
-            </div>
-            <div class="formGrid">
-              <button class="btnGhost" type="button" id="backupRestoreBtn" data-role-only="manager">Restaurar backup de ontem</button>
+              <div class="field">
+                <label>EXPORTAR CARDAPIO</label>
+                <button class="btnGhost" type="button" id="exportMenuBtn" data-role-only="manager">Exportar XML/JSON</button>
+              </div>
+              <div class="field">
+                <label>RESTAURAR BACKUP</label>
+                <button class="btnGhost" type="button" id="backupRestoreBtn" data-role-only="manager" title="Restaurar backup de ontem" aria-label="Restaurar backup de ontem">Restaurar backup de ontem</button>
+              </div>
             </div>
             <input id="backupFileInput" type="file" accept=".sqlite,.db" style="display:none" />
             <input id="xmlFileInput" type="file" accept=".xml,text/xml" style="display:none" />
@@ -774,17 +771,25 @@
   <div class="modalOverlay" id="managerLoginModal">
     <div class="modal" role="dialog" aria-modal="true">
       <div class="modalHeader">
-        <h3>🔐 Acesso Gerente</h3>
+        <h3>🔐 Modo Gerente</h3>
         <button class="closeX" type="button" id="managerLoginClose">✖</button>
       </div>
       <div class="modalBody">
         <div class="sysCard">
-          <div class="sysTitle">Acesso</div>
+          <div class="sysTitle">Entrar / Sair</div>
           <div class="field">
             <label>PIN do gerente</label>
             <input id="managerPinInputLogin" type="password" placeholder="Digite o PIN" />
           </div>
-          <button class="btn" type="button" id="managerLoginBtnModal">Entrar como gerente</button>
+          <div class="formGrid">
+            <button class="btn" type="button" id="managerLoginBtnModal">Entrar como gerente</button>
+            <button class="btnGhost" type="button" id="managerLogoutBtn">Sair para operador</button>
+          </div>
+          <div class="field">
+            <label>Novo PIN (mín. 4)</label>
+            <input id="managerNewPinInput" type="password" placeholder="Definir novo PIN" />
+          </div>
+          <button class="btnGhost" type="button" id="managerSetPinBtn" data-role-only="manager">Alterar PIN</button>
           <div class="hint">Dica: o PIN padrão é 1234 (troque no primeiro uso).</div>
         </div>
       </div>
@@ -854,6 +859,7 @@
               <option value="debito">Débito</option>
               <option value="credito">Crédito</option>
               <option value="pedido_pago">Pedido Pago</option>
+              <option value="pedido_pago_ifood">Pedido Pago iFood</option>
             </select>
           </div>
           <div class="modalFooter" style="padding:0; margin-top:6px">
