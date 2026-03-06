@@ -2232,24 +2232,10 @@
       }
 
       if (type === "entrega"){
-        if (!phone){
-          els.custPhone.classList.add("invalid");
-          els.custPhone.focus();
-          toast("Informe o telefone.", "error");
-          return false;
-        }
-
-        if (!isValidPhone(phone)){
+        if (phone && !isValidPhone(phone)){
           els.custPhone.classList.add("invalid");
           els.custPhone.focus();
           toast("Telefone inválido.", "error");
-          return false;
-        }
-
-        if (!address){
-          els.custAddress.classList.add("invalid");
-          els.custAddress.focus();
-          toast("Informe o endereço.", "error");
           return false;
         }
       }

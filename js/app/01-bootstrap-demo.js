@@ -1457,9 +1457,6 @@ ${bodyHtml}
           const payload = demoParseJsonBody(init);
           const items = Array.isArray(payload?.items) ? payload.items : [];
           if (items.length === 0) return demoError("Carrinho vazio", 400);
-          if (db.meta.cash_status !== "ABERTO") {
-            return demoError("Caixa esta FECHADO. Abra o caixa para vender.", 400);
-          }
 
           const now = demoNowIso();
           const orderType = String(payload.order_type || "retirada");
