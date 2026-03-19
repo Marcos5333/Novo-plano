@@ -347,7 +347,7 @@
         const totalIn = roundMoney(totalGeral || 0);
         const moneySales = roundMoney(byPay.dinheiro || 0);
         const totalOut = roundMoney(movementTotals.totalOut || 0);
-        const projectedCash = roundMoney(openingAmount + totalIn - totalOut);
+        const projectedCash = roundMoney(openingAmount + moneySales - totalOut);
 
         return {
           rows,

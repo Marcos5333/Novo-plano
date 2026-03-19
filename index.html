@@ -5,10 +5,67 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>MFAS PDV </title>
   <link rel="stylesheet" href="style.css" />
+  <script>
+    (function(){
+      try{
+        var ok = false;
+        try{ ok = sessionStorage.getItem("mvs_access_session_v1") === "1"; }catch(e){}
+        if (!ok) { try{ ok = localStorage.getItem("mvs_access_session_v1") === "1"; }catch(e){} }
+        if (!ok) document.documentElement.classList.add("access-locked");
+      }catch(e){}
+      try{
+        var t = "";
+        try{ t = String(localStorage.getItem("mvs_theme_v1") || ""); }catch(e){}
+        if (t === "loginbg") document.documentElement.classList.add("theme-loginbg");
+      }catch(e){}
+    })();
+  </script>
 
 </head>
 
-<body>
+  <body>
+  <!-- LOGIN: ACESSO AO SISTEMA -->
+  <div class="modalOverlay" id="accessLoginModal">
+    <div class="accessLayout" role="dialog" aria-modal="true" aria-labelledby="accessLoginTitle">
+      <section class="accessHero" aria-hidden="true">
+        <div class="accessHeroCopy">
+          <div class="accessHeroLead">Faça login e</div>
+          <div class="accessHeroTitle">Entre para nosso time</div>
+          <div class="accessHeroText">Acesso restrito ao time autorizado.</div>
+        </div>
+        <div class="accessHeroArt">
+          <img
+            id="accessLogoPreview"
+            src="mvs-logo.png"
+            alt="Logo da empresa"
+            decoding="async"
+          />
+        </div>
+      </section>
+
+      <section class="accessCard" aria-label="Login">
+        <div class="accessCardHead">
+          <h3 id="accessLoginTitle">Login</h3>
+          <div class="accessCardSub" id="accessCompanyName">MVS TECHSOLUTION</div>
+        </div>
+
+        <div class="accessCardBody">
+          <div class="diagBox" id="accessLoginMsg">Informe seu PIN de acesso.</div>
+
+          <div class="field">
+            <label for="accessPinInput">Senha (PIN)</label>
+            <input id="accessPinInput" type="password" inputmode="numeric" autocomplete="current-password" placeholder="••••" maxlength="12" />
+          </div>
+
+          <button class="btn" type="button" id="accessLoginBtn">Entrar</button>
+          <button class="btnGhost" type="button" id="accessPinClearBtn">Limpar</button>
+
+          <div class="hint" id="accessLoginHint">Primeiro acesso: PIN padrão 0000 (altere em Sistema → Acesso).</div>
+        </div>
+      </section>
+    </div>
+  </div>
+
   <div class="wrap">
     <header class="topbar">
       <div class="brand">
@@ -350,21 +407,35 @@
               </div>
             </div>
 
-            <div id="paymentMethodSingleWrap">
-              <select id="paymentMethod">
-                <option value="dinheiro" selected>Dinheiro</option>
-                <option value="pix">PIX</option>
-                <option value="debito">Débito</option>
-                <option value="credito">Crédito</option>
-                <option value="pedido_pago">Pedido Pago</option>
-                <option value="pedido_pago_ifood">Pedido Pago iFood</option>
-              </select>
-            </div>
+             <div id="paymentMethodSingleWrap">
+               <select id="paymentMethod">
+                 <option value="dinheiro" selected>Dinheiro</option>
+                 <option value="pix">PIX</option>
+                 <option value="debito">Débito</option>
+                 <option value="credito">Crédito</option>
+                 <option value="pedido_pago">Pedido Pago</option>
+                 <option value="pedido_pago_ifood">Pedido Pago iFood</option>
+               </select>
+             </div>
 
-            <div id="paymentSplitWrap" class="paymentSplitWrap" style="display:none">
-              <div id="paymentSplitList" class="paymentSplitList"></div>
-              <div class="hint" id="paymentSplitHint">Dividido: R$ 0,00 de R$ 0,00</div>
-            </div>
+             <div id="checkoutCashWrap" class="checkoutCashWrap" style="display:none">
+               <div class="formGrid checkoutCashGrid">
+                 <div class="field">
+                   <label for="checkoutCashReceived">Recebido (R$)</label>
+                   <input id="checkoutCashReceived" inputmode="decimal" placeholder="Ex: 50,00" />
+                 </div>
+                 <div class="field">
+                   <label for="checkoutCashChange">Troco (R$)</label>
+                   <input id="checkoutCashChange" readonly />
+                 </div>
+               </div>
+               <div class="hint" id="checkoutCashHint">Digite quanto recebeu para calcular o troco.</div>
+             </div>
+
+             <div id="paymentSplitWrap" class="paymentSplitWrap" style="display:none">
+               <div id="paymentSplitList" class="paymentSplitList"></div>
+               <div class="hint" id="paymentSplitHint">Dividido: R$ 0,00 de R$ 0,00</div>
+             </div>
           </div>
           <div class="field">
             <label>Total</label>
@@ -660,8 +731,6 @@
           <div class="sysBrandActions">
             <button class="btn" type="button" id="companyNameSaveBtn" data-role-only="manager">Salvar Nome</button>
             <button class="btnGhost" type="button" id="companyLogoUploadBtn" data-role-only="manager">Enviar Logo</button>
-          </div>
-          <div class="sysBrandActions single">
             <button class="btnGhost" type="button" id="companyLogoRemoveBtn" data-role-only="manager">Remover Logo</button>
           </div>
           <div class="hint">Formatos aceitos: PNG e JPG.</div>
@@ -683,39 +752,59 @@
                 <span>Ativar backup automático (23:50)</span>
               </div>
             </div>
-            <div class="formGrid">
-              <div class="field">
-                <label>IMPORTAR CARDAPIO</label>
-                <button class="btnGhost" type="button" id="importXmlBtn" data-role-only="manager">Importar XML</button>
-              </div>
+             <div class="formGrid">
+               <div class="field">
+                 <label>IMPORTAR CARDAPIO</label>
+                 <button class="btnGhost" type="button" id="importXmlBtn" data-role-only="manager">Importar XML</button>
+               </div>
               <div class="field">
                 <label>EXPORTAR CARDAPIO</label>
                 <button class="btnGhost" type="button" id="exportMenuBtn" data-role-only="manager">Exportar XML/JSON</button>
               </div>
               <div class="field">
-                <label>RESTAURAR BACKUP</label>
-                <button class="btnGhost" type="button" id="backupRestoreBtn" data-role-only="manager" title="Restaurar backup de ontem" aria-label="Restaurar backup de ontem">Restaurar backup de ontem</button>
-              </div>
-            </div>
-            <input id="backupFileInput" type="file" accept=".sqlite,.db" style="display:none" />
-            <input id="xmlFileInput" type="file" accept=".xml,text/xml" style="display:none" />
-            <div class="hint" id="backupHint">Backup automático ativo.</div>
-          </div>
+                 <label>RESTAURAR BACKUP</label>
+                 <button class="btnGhost" type="button" id="backupRestoreBtn" data-role-only="manager" title="Restaurar backup de ontem" aria-label="Restaurar backup de ontem">Restaurar backup de ontem</button>
+               </div>
+             </div>
+             <input id="backupFileInput" type="file" accept=".sqlite,.db" style="display:none" />
+             <input id="xmlFileInput" type="file" accept=".xml,text/xml" style="display:none" />
+             <div class="hint" id="backupHint">Backup automático ativo.</div>
+           </div>
 
-          <div class="sysCard">
-            <div class="sysTitle">Diagnóstico</div>
-            <div class="diagBox" id="diagInfo">Carregando...</div>
-            <div class="formGrid">
-              <button class="btnGhost" type="button" id="diagRefreshBtn">Atualizar</button>
-              <button class="btnGhost" type="button" id="logClearBtn" data-role-only="manager">Limpar logs</button>
-              <button class="btnGhost" type="button" id="cancelSaleBtn">Cancelar venda</button>
-            </div>
-            <div class="logList" id="logList"></div>
-          </div>
+           <div class="sysCard">
+             <div class="sysTitle">Diagnóstico</div>
+             <div class="diagBox" id="diagInfo">Carregando...</div>
+             <div class="formGrid">
+               <button class="btnGhost" type="button" id="diagRefreshBtn">Atualizar</button>
+               <button class="btnGhost" type="button" id="logClearBtn" data-role-only="manager">Limpar logs</button>
+               <button class="btnGhost" type="button" id="cancelSaleBtn">Cancelar venda</button>
+             </div>
+             <div class="logList" id="logList"></div>
+           </div>
 
-          <div class="sysCard">
-            <div class="sysTitle">Atalhos</div>
-            <div class="shortcutList">
+           <div class="sysCard compact">
+             <div class="sysTitle">Acesso</div>
+             <button class="btnGhost" type="button" id="lockScreenBtn">Bloquear tela</button>
+             <div class="field">
+               <label>Novo PIN de acesso (mín. 4)</label>
+               <input id="accessNewPinInput" data-role-only="manager" type="password" placeholder="Definir novo PIN" maxlength="12" />
+             </div>
+             <button class="btnGhost" type="button" id="accessSetPinBtn" data-role-only="manager">Alterar PIN de acesso</button>
+             <div class="hint">Somente gerente pode trocar o PIN.</div>
+           </div>
+
+           <div class="sysCard compact">
+             <div class="sysTitle">Tema</div>
+             <div class="switchRow">
+               <input type="checkbox" id="themeLoginBgToggle" />
+               <span>Modo dark (fundo)</span>
+             </div>
+             <div class="hint">Usa o mesmo fundo da tela de login.</div>
+            </div>
+
+           <div class="sysCard">
+             <div class="sysTitle">Atalhos</div>
+             <div class="shortcutList">
               <div><kbd>F2</kbd> Finalizar pedido</div>
               <div><kbd>F4</kbd> Buscar produto</div>
               <div><kbd>Ctrl</kbd>+<kbd>P</kbd> Reimprimir último</div>
@@ -1078,6 +1167,7 @@
   />
 
   <script src="js/core/helpers.js" defer></script>
+  <script src="js/app/00-access-login.js" defer></script>
   <script src="js/app/01-bootstrap-demo.js" defer></script>
   <script src="js/app/02-logs-state-products.js" defer></script>
   <script src="js/app/03-ui-ops-reports-expenses.js" defer></script>

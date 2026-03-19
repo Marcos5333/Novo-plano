@@ -4,6 +4,14 @@
       --bg1:#eef3f9;
       --bg2:#f6f9fd;
       --bg3:#ffffff;
+      --app-bg: linear-gradient(180deg, var(--bg1), var(--bg2) 45%, var(--bg3));
+      --app-overlay:
+        radial-gradient(900px 420px at 10% 0%, rgba(37,99,235,.08), transparent 60%),
+        radial-gradient(800px 420px at 95% 0%, rgba(79,70,229,.06), transparent 60%);
+      --login-bg:
+        radial-gradient(900px 520px at 14% 18%, rgba(16,185,129,.20), transparent 60%),
+        radial-gradient(760px 460px at 82% 58%, rgba(59,130,246,.18), transparent 55%),
+        linear-gradient(135deg, #0b1020, #1a1031);
       --card:#ffffff;
       --ink:#1f2a44;
       --muted:#6b7a90;
@@ -37,18 +45,27 @@
       margin:0;
       font-family:var(--font);
       color:var(--ink);
-      background: linear-gradient(180deg, var(--bg1), var(--bg2) 45%, var(--bg3));
+      background: var(--app-bg);
       overflow-x:hidden;
+      font-synthesis:none;
     }
 
     body:before{
       content:"";
       position:fixed; inset:0;
       pointer-events:none;
-      background:
-        radial-gradient(900px 420px at 10% 0%, rgba(37,99,235,.08), transparent 60%),
-        radial-gradient(800px 420px at 95% 0%, rgba(79,70,229,.06), transparent 60%);
+      background: var(--app-overlay);
       opacity:1;
+    }
+
+    html.theme-loginbg{
+      --app-bg: var(--login-bg);
+      --app-overlay: none;
+    }
+    html.theme-loginbg .footerNote,
+    html.theme-loginbg .footerShortcuts{
+      color: rgba(229,231,235,.86);
+      text-shadow: 0 10px 26px rgba(0,0,0,.45);
     }
 
     /* ===== Layout mais "tela cheia" ===== */
@@ -66,6 +83,7 @@
       display:flex;
       align-items:center;
       justify-content:space-between;
+      flex-wrap:wrap;
       gap:14px;
       margin-bottom:14px;
     }
@@ -117,7 +135,7 @@
       letter-spacing:.4px;
       color:#1f2a44;
       line-height:1.1;
-      font-weight:1000;
+      font-weight:800;
       text-transform:uppercase;
     }
 
@@ -125,6 +143,9 @@
       display:grid;
       gap:8px;
       justify-items:end;
+      flex: 1 1 auto;
+      min-width: 0;
+      max-width: 100%;
     }
     .mobileMenuBtn{
       display:none;
@@ -166,6 +187,7 @@
       gap:10px;
       flex-wrap:wrap;
       justify-content:flex-end;
+      min-width:0;
     }
 
     .pill{
@@ -176,12 +198,16 @@
       border:1px solid rgba(37,99,235,.18);
       color:#1f2a44;
       box-shadow: var(--shadow2);
-      font-weight:800;
+      font-weight:700;
       font-size:13px;
       letter-spacing:.2px;
       cursor:pointer;
       user-select:none;
       touch-action:manipulation;
+      max-width:100%;
+    }
+    .pill span{
+      min-width:0;
     }
     .dot{
       width:10px;height:10px;border-radius:999px;
@@ -777,14 +803,16 @@
 
     .locked{
       opacity:.55;
-      filter: grayscale(.2);
       cursor:not-allowed;
     }
     #systemModal .locked{
-      filter: grayscale(.35);
+      filter:none;
     }
 
     /* ===== Sistema ===== */
+    #systemModal .modal{
+      width:min(1040px, 100%);
+    }
     #systemModal .modalHeader{
       padding:18px 20px;
       border-bottom:1px solid rgba(18,28,65,.12);
@@ -807,6 +835,14 @@
       display:grid;
       place-items:center;
       padding:0;
+    }
+    #systemModal .modalBody{
+      padding:18px;
+      gap:14px;
+      background: linear-gradient(180deg, rgba(248,250,252,.98), rgba(241,245,249,.98));
+    }
+    #systemModal .formGrid{
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     }
     .sysBrandCard{
       border:1px solid rgba(18,28,65,.10);
@@ -848,7 +884,7 @@
     }
     .sysBrandActions{
       display:grid;
-      grid-template-columns:repeat(2, minmax(0,1fr));
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap:10px;
     }
     .sysBrandActions.single{
@@ -886,11 +922,20 @@
       border:1px solid rgba(18,28,65,.12);
       box-shadow:none;
     }
-    #companyLogoUploadBtn:hover,
-    #companyLogoRemoveBtn:hover{
+    #companyLogoUploadBtn:hover{
       color:#121a30;
       border-color:rgba(18,28,65,.20);
       background:#fbfcfe;
+    }
+    #companyLogoRemoveBtn{
+      background: rgba(239,68,68,.06);
+      border-color: rgba(239,68,68,.22);
+      color: rgba(153,27,27,.96);
+    }
+    #companyLogoRemoveBtn:hover{
+      background: rgba(239,68,68,.10);
+      border-color: rgba(239,68,68,.32);
+      color: rgba(127,29,29,.98);
     }
     #companyLogoUploadBtn[disabled],
     #companyLogoRemoveBtn[disabled],
@@ -924,18 +969,29 @@
     }
     .sysGrid{
       display:grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap:12px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap:14px;
+      align-items:start;
+    }
+    #systemModal .sysGrid > .sysCard:last-child{
+      grid-column: 1 / -1;
     }
     @media (max-width: 860px){
       .sysGrid{grid-template-columns:1fr}
       .sysBrandIntroText{
-        font-size:18px;
+        font-size:15px;
       }
     }
     @media (max-width: 560px){
       #systemModal .modalHeader{
         padding:14px 14px;
+      }
+      #systemModal .modalBody{
+        padding:12px;
+        gap:12px;
+      }
+      #systemModal .formGrid{
+        grid-template-columns:1fr;
       }
       #systemModal #systemClose{
         min-width:46px;
@@ -999,6 +1055,40 @@
     .sysTitle{
       font-weight:1000;
       font-size:14px;
+    }
+    #systemModal .sysCard,
+    #systemModal .sysBrandCard{
+      border-color: rgba(18,28,65,.12);
+      box-shadow: 0 16px 34px rgba(20,35,70,.10);
+    }
+    #systemModal .sysCard{
+      border-radius:18px;
+      padding:14px;
+      gap:12px;
+    }
+    #systemModal .sysCard.compact{
+      padding:12px;
+      gap:10px;
+    }
+    #systemModal .sysTitle{
+      font-size:12px;
+      letter-spacing:.35px;
+      text-transform:uppercase;
+      color: rgba(31,42,68,.86);
+    }
+    #systemModal .hint{
+      color: rgba(31,42,68,.78);
+    }
+    @media (max-width: 560px){
+      #systemModal .sysCard{
+        padding:12px;
+        border-radius:14px;
+        gap:10px;
+      }
+      #systemModal .sysCard.compact{
+        padding:10px;
+        gap:8px;
+      }
     }
     .diagBox{
       padding:10px;
@@ -1197,6 +1287,199 @@
       overflow-y:auto;
       overscroll-behavior: contain;
       -webkit-overflow-scrolling: touch;
+    }
+
+    /* ===== Acesso (Login) ===== */
+    #accessLoginModal{
+      z-index:3000;
+      --access-card-w: clamp(320px, 34vw, 420px);
+      padding:0;
+      align-items:stretch;
+      justify-content:center;
+      background: var(--login-bg);
+    }
+    html.access-locked #accessLoginModal{
+      display:flex;
+    }
+    html.access-locked body{
+      overflow:hidden;
+    }
+    html.access-locked .wrap{
+      filter: blur(6px);
+      pointer-events:none;
+      user-select:none;
+    }
+    html.access-locked #signatureMark{
+      pointer-events:none;
+      opacity:.2;
+    }
+    #accessLoginModal .accessLayout{
+      width:min(1120px, 100%);
+      min-height:100vh;
+      min-height:100dvh;
+      display:grid;
+      grid-template-columns: 1.15fr var(--access-card-w);
+      grid-template-rows: auto auto;
+      align-items:start;
+      align-content:center;
+      column-gap: clamp(18px, 4vw, 48px);
+      row-gap: 18px;
+      padding: clamp(18px, 4vw, 44px);
+      margin:0 auto;
+    }
+    #accessLoginModal .accessHero{ display: contents; }
+    #accessLoginModal .accessHeroCopy{ grid-column: 1; grid-row: 1; }
+    #accessLoginModal .accessHeroArt{ grid-column: 1; grid-row: 2; }
+    #accessLoginModal .accessCard{ grid-column: 2; grid-row: 2; }
+    @media (max-width: 920px){
+      #accessLoginModal{ padding:18px; }
+      #accessLoginModal .accessLayout{
+        min-height:auto;
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
+        align-items:start;
+        align-content:center;
+        gap:18px;
+        padding:0;
+      }
+      #accessLoginModal .accessHero{ display:none; }
+      #accessLoginModal .accessCard{ grid-column: 1; grid-row: 1; min-height:auto; }
+    }
+    #accessLoginModal .accessHero{
+      color:#e5e7eb;
+    }
+    #accessLoginModal .accessHeroCopy{
+      display:grid;
+      gap:10px;
+    }
+    #accessLoginModal .accessHeroLead{
+      font-size:32px;
+      line-height:1.04;
+      font-weight:1000;
+      color: rgba(229,231,235,.92);
+      letter-spacing:.2px;
+    }
+    #accessLoginModal .accessHeroTitle{
+      font-size:44px;
+      line-height:1.03;
+      font-weight:1000;
+      letter-spacing:.2px;
+      color: rgba(52,211,153,.96);
+      text-shadow: 0 16px 40px rgba(16,185,129,.12);
+    }
+    #accessLoginModal .accessHeroText{
+      font-size:14px;
+      font-weight:900;
+      max-width:42ch;
+      color: rgba(229,231,235,.72);
+    }
+    #accessLoginModal .accessHeroArt{
+      display:flex;
+      align-items:flex-start;
+      justify-content:center;
+    }
+    #accessLoginModal #accessLogoPreview{
+      display:block;
+      box-sizing:border-box;
+      width:100%;
+      max-width:var(--access-card-w);
+      height:auto;
+      border-radius:24px;
+      background: rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.10);
+      padding:14px;
+      box-shadow: 0 34px 70px rgba(0,0,0,.38);
+    }
+    #accessLoginModal .accessCard{
+      background: linear-gradient(180deg, rgba(41,37,72,.92), rgba(17,24,39,.82));
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:22px;
+      box-shadow: 0 34px 70px rgba(0,0,0,.44);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      overflow:hidden;
+      box-sizing:border-box;
+      display:flex;
+      flex-direction:column;
+      min-height: var(--access-card-w);
+    }
+    #accessLoginModal .accessCardHead{
+      padding:18px 18px 0 18px;
+      display:grid;
+      gap:6px;
+      text-align:center;
+    }
+    #accessLoginModal #accessLoginTitle{
+      margin:0;
+      font-size:22px;
+      font-weight:1000;
+      letter-spacing:.25px;
+      color: rgba(52,211,153,.96);
+    }
+    #accessLoginModal .accessCardSub{
+      font-size:12px;
+      font-weight:900;
+      letter-spacing:.25px;
+      color: rgba(229,231,235,.70);
+    }
+    #accessLoginModal .accessCardBody{
+      padding:16px 18px 18px 18px;
+      display:grid;
+      gap:12px;
+      flex:1 1 auto;
+      align-content:center;
+    }
+    #accessLoginModal label{
+      color: rgba(229,231,235,.86);
+    }
+    #accessLoginModal input{
+      background: rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.12);
+      color:#e5e7eb;
+      box-shadow:none;
+    }
+    #accessLoginModal input::placeholder{
+      color: rgba(229,231,235,.36);
+    }
+    #accessLoginModal input:focus{
+      border-color: rgba(52,211,153,.55);
+      box-shadow: 0 0 0 4px rgba(52,211,153,.16);
+    }
+    #accessLoginModal .btn{
+      width:100%;
+      justify-content:center;
+      border-radius:14px;
+      font-weight:1000;
+      letter-spacing:.5px;
+    }
+    #accessLoginModal #accessLoginBtn{
+      background: linear-gradient(135deg, #10b981, #22c55e);
+      border: 1px solid rgba(34,197,94,.45);
+      box-shadow: 0 18px 30px rgba(16,185,129,.18);
+    }
+    #accessLoginModal #accessLoginBtn:hover{
+      filter: brightness(1.03);
+    }
+    #accessLoginModal #accessLoginBtn:active{
+      transform: translateY(1px);
+    }
+    #accessLoginModal .btnGhost{
+      width:100%;
+      justify-content:center;
+      border-radius:14px;
+      color: rgba(229,231,235,.90);
+      background: rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.12);
+      box-shadow:none;
+    }
+    #accessLoginModal .diagBox{
+      color: rgba(229,231,235,.92);
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+    }
+    #accessLoginMsg.error{
+      border-color: rgba(255,77,109,.55);
+      background: rgba(255,77,109,.12);
     }
     #confirmModal,
     #choiceModal,
@@ -1467,6 +1750,19 @@
     .paymentSplitWrap{
       display:grid;
       gap:8px;
+    }
+    .checkoutCashWrap{
+      display:grid;
+      gap:8px;
+      margin-top:10px;
+      padding-top:10px;
+      border-top:1px dashed rgba(18,28,65,.16);
+    }
+    #checkoutCashChange[readonly]{
+      background: rgba(15,23,42,.04);
+    }
+    .checkoutCashHintError{
+      color:#b91c1c;
     }
     .paymentSplitList{
       display:grid;

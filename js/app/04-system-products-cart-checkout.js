@@ -668,6 +668,7 @@
       updateMiniStatus();
       updateSystemLock();
       updateBackupHint();
+      syncThemeLoginBgToggle();
       if (!isManager()){
         toast("Modo operador: recursos administrativos bloqueados.", "info");
       }
@@ -924,6 +925,47 @@
         setAutoBackupEnabled(enabled);
         updateBackupHint();
         logEvent("info", "Backup automático", enabled ? "Ativado" : "Desativado");
+      });
+    }
+
+    const THEME_KEY = "mvs_theme_v1";
+    const THEME_LOGIN_BG = "loginbg";
+
+    function getStoredTheme(){
+      try{
+        return String(localStorage.getItem(THEME_KEY) || "");
+      } catch {
+        return "";
+      }
+    }
+
+    function setThemeLoginBg(enabled){
+      document.documentElement.classList.toggle("theme-loginbg", enabled);
+      try{
+        if (enabled){
+          localStorage.setItem(THEME_KEY, THEME_LOGIN_BG);
+        } else {
+          localStorage.removeItem(THEME_KEY);
+        }
+      } catch {
+        // ignore storage failures
+      }
+      if (els.themeLoginBgToggle) els.themeLoginBgToggle.checked = enabled;
+    }
+
+    function syncThemeLoginBgToggle(){
+      if (!els.themeLoginBgToggle) return;
+      const storedTheme = getStoredTheme();
+      const enabled = document.documentElement.classList.contains("theme-loginbg") || storedTheme === THEME_LOGIN_BG;
+      els.themeLoginBgToggle.checked = enabled;
+    }
+
+    if (els.themeLoginBgToggle){
+      syncThemeLoginBgToggle();
+      els.themeLoginBgToggle.addEventListener("change", () => {
+        const enabled = !!els.themeLoginBgToggle.checked;
+        setThemeLoginBg(enabled);
+        toast(enabled ? "Modo dark (fundo) ativado." : "Modo padrão ativado.", "info");
       });
     }
 
@@ -2132,6 +2174,87 @@
       };
     }
 
+    function clearCheckoutCashFields(){
+      if (els.checkoutCashReceived) els.checkoutCashReceived.value = "";
+      if (els.checkoutCashChange) els.checkoutCashChange.value = brl(0);
+      if (els.checkoutCashHint) els.checkoutCashHint.textContent = "Digite quanto recebeu para calcular o troco.";
+      if (els.checkoutCashHint) els.checkoutCashHint.classList.remove("checkoutCashHintError");
+      if (els.checkoutCashReceived) els.checkoutCashReceived.classList.remove("invalid");
+      if (els.checkoutCashWrap) els.checkoutCashWrap.style.display = "none";
+    }
+
+    function updateCheckoutCashChange(needsPay, totalTarget){
+      if (!els.checkoutCashWrap || !els.checkoutCashReceived || !els.checkoutCashChange || !els.checkoutCashHint) return;
+
+      const splitEnabled = !!els.paymentSplitToggle?.checked;
+      const method = String(els.paymentMethod?.value || "").trim().toLowerCase();
+      const show = !!needsPay && !splitEnabled && method === "dinheiro";
+
+      els.checkoutCashWrap.style.display = show ? "grid" : "none";
+      if (!show){
+        clearCheckoutCashFields();
+        return;
+      }
+
+      const total = roundMoney(totalTarget);
+      const raw = String(els.checkoutCashReceived.value || "").trim();
+      if (!raw){
+        els.checkoutCashChange.value = brl(0);
+        els.checkoutCashHint.textContent = "Digite quanto recebeu para calcular o troco.";
+        els.checkoutCashHint.classList.remove("checkoutCashHintError");
+        els.checkoutCashReceived.classList.remove("invalid");
+        return;
+      }
+
+      const received = parsePaymentAmountInput(raw);
+      const receivedValid = Number.isFinite(received) && received >= 0;
+      const diff = receivedValid ? roundMoney(received - total) : NaN;
+      const ok = receivedValid && diff >= -0.009;
+
+      els.checkoutCashReceived.classList.toggle("invalid", !ok);
+      els.checkoutCashHint.classList.toggle("checkoutCashHintError", !ok);
+
+      if (!receivedValid){
+        els.checkoutCashChange.value = brl(0);
+        els.checkoutCashHint.textContent = "Valor recebido inválido.";
+        return;
+      }
+
+      if (!ok){
+        const missing = Math.max(0, roundMoney(total - received));
+        els.checkoutCashChange.value = brl(0);
+        els.checkoutCashHint.textContent = `Falta ${brl(missing)} para completar.`;
+        return;
+      }
+
+      const change = Math.max(0, roundMoney(received - total));
+      els.checkoutCashChange.value = brl(change);
+      els.checkoutCashHint.textContent = change > 0 ? `Troco: ${brl(change)}.` : "Sem troco.";
+    }
+
+    function validateCheckoutCashReceived(needsPay, totalTarget){
+      if (!needsPay) return { ok: true, received: null, change: 0 };
+      if (els.paymentSplitToggle?.checked) return { ok: true, received: null, change: 0 };
+      const method = String(els.paymentMethod?.value || "").trim().toLowerCase();
+      if (method !== "dinheiro") return { ok: true, received: null, change: 0 };
+
+      const raw = String(els.checkoutCashReceived?.value || "").trim();
+      if (!raw) return { ok: true, received: null, change: 0 };
+
+      const received = parsePaymentAmountInput(raw);
+      if (!Number.isFinite(received) || received < 0){
+        return { ok: false, message: "Valor recebido inválido." };
+      }
+
+      const total = roundMoney(totalTarget);
+      if ((received + 0.009) < total){
+        return { ok: false, message: `Valor recebido menor que o total (${brl(total)}).` };
+      }
+
+      const change = Math.max(0, roundMoney(received - total));
+      return { ok: true, received: roundMoney(received), change };
+    }
+
     function calcTotals(){
       let subtotal = 0;
       for (const it of cart.values()) subtotal += it.unit_price * it.qty;
@@ -2144,7 +2267,8 @@
     function unlockCheckoutFields(){
       const fields = [
         els.orderType, els.tableNo, els.custName, els.custPhone,
-        els.deliveryFee, els.custAddress, els.orderNotes, els.paymentMethod, els.paymentSplitToggle, els.paymentSplitPeople
+        els.deliveryFee, els.custAddress, els.orderNotes, els.paymentMethod, els.paymentSplitToggle, els.paymentSplitPeople,
+        els.checkoutCashReceived
       ];
       for (const f of fields){
         if (!f) continue;
@@ -2173,6 +2297,7 @@
       closingTableIds = null;
       activeReceivableId = null;
       if (els.deliveryFee) els.deliveryFee.value = "";
+      clearCheckoutCashFields();
       resetPaymentSplitState(calcTotals().total);
       unlockCheckoutFields();
       forceEnableCheckoutModal();
@@ -2182,7 +2307,7 @@
     }
 
     function clearCheckoutInvalid(){
-      [els.orderType, els.tableNo, els.deliveryFee, els.custName, els.custPhone, els.custAddress].forEach(el => {
+      [els.orderType, els.tableNo, els.deliveryFee, els.custName, els.custPhone, els.custAddress, els.checkoutCashReceived].forEach(el => {
         if (el) el.classList.remove("invalid");
       });
     }
@@ -2718,6 +2843,14 @@
     document.addEventListener("keydown", (e) => {
       const key = e.key;
       const isCtrlP = (e.ctrlKey || e.metaKey) && key.toLowerCase() === "p";
+      const accessLocked = window.MVS_ACCESS?.isLocked?.() || document.documentElement.classList.contains("access-locked");
+
+      if (accessLocked){
+        if (isCtrlP || (!e.altKey && (key === "F2" || key === "F4")) || key === "Escape"){
+          e.preventDefault();
+        }
+        return;
+      }
 
       if (isCtrlP){
         e.preventDefault();
@@ -2782,6 +2915,13 @@
 
       renderTotals();
       if (els.checkoutTotal) els.checkoutTotal.value = brl(totalTarget);
+      updateCheckoutCashChange(needsPay, totalTarget);
+    }
+
+    function checkoutNeedsPay(){
+      const orderType = String(els.orderType?.value || "");
+      const isDeferredType = orderType === "mesa" || orderType === "a_receber";
+      return (!isDeferredType) || (closingTableId !== null);
     }
 
     // Atualiza meta tags no carrinho (só visual)
@@ -2795,6 +2935,7 @@
       renderTotals();
       if (els.checkoutTotal) els.checkoutTotal.value = brl(totalTarget);
       if (els.paymentSplitToggle?.checked) updatePaymentSplitHint(totalTarget);
+      updateCheckoutCashChange(checkoutNeedsPay(), totalTarget);
     });
     if (els.deliveryFee) els.deliveryFee.addEventListener("change", () => {
       const fee = parseCurrentDeliveryFee();
@@ -2803,6 +2944,7 @@
       renderTotals();
       if (els.checkoutTotal) els.checkoutTotal.value = brl(totalTarget);
       if (els.paymentSplitToggle?.checked) updatePaymentSplitHint(totalTarget);
+      updateCheckoutCashChange(checkoutNeedsPay(), totalTarget);
     });
     els.custName.addEventListener("input", () => {
       if (els.orderType.value === "a_receber" && closingTableId === null){
@@ -2812,6 +2954,18 @@
     els.paymentMethod.addEventListener("change", () => {
       if (els.paymentSplitToggle?.checked) return;
       els.metaPay.textContent = getCheckoutPaymentMeta();
+      updateCheckoutCashChange(checkoutNeedsPay(), calcTotals().total);
+    });
+    if (els.checkoutCashReceived) els.checkoutCashReceived.addEventListener("input", () => {
+      updateCheckoutCashChange(checkoutNeedsPay(), calcTotals().total);
+    });
+    if (els.checkoutCashReceived) els.checkoutCashReceived.addEventListener("change", () => {
+      const raw = String(els.checkoutCashReceived.value || "").trim();
+      if (raw){
+        const parsed = parsePaymentAmountInput(raw);
+        if (Number.isFinite(parsed)) els.checkoutCashReceived.value = formatPaymentAmountInput(parsed);
+      }
+      updateCheckoutCashChange(checkoutNeedsPay(), calcTotals().total);
     });
     if (els.paymentSplitToggle) els.paymentSplitToggle.addEventListener("change", () => {
       if (els.paymentSplitToggle.checked){
@@ -2868,6 +3022,18 @@
         const isDeferredType = orderType === "mesa" || orderType === "a_receber";
         const payNow = (!isDeferredType) || (closingTableId !== null);
         const paymentData = resolveCheckoutPayment(payNow, totals.total);
+
+         const cashValidation = validateCheckoutCashReceived(payNow, totals.total);
+         if (!cashValidation.ok){
+           if (els.checkoutCashReceived){
+             els.checkoutCashReceived.classList.add("invalid");
+             els.checkoutCashReceived.focus();
+             els.checkoutCashReceived.select?.();
+           }
+           toast(cashValidation.message || "Valor recebido inválido.", "error");
+           updateCheckoutCashChange(payNow, totals.total);
+           return;
+         }
 
         const payload = {
           order_type: orderType,
@@ -2932,15 +3098,16 @@
           closingTableId = null;
           closingTableIds = null;
           activeReceivableId = null;
-          updatePaymentVisibility();
-          cart.clear();
-          renderCart();
-          resetPaymentSplitState(0);
-        } else {
-          const resp = await fetch("/api/orders", {
-            method:"POST",
-            headers:{ "Content-Type":"application/json" },
-            body: JSON.stringify(payload)
+           updatePaymentVisibility();
+           cart.clear();
+           renderCart();
+           resetPaymentSplitState(0);
+           clearCheckoutCashFields();
+         } else {
+           const resp = await fetch("/api/orders", {
+             method:"POST",
+             headers:{ "Content-Type":"application/json" },
+             body: JSON.stringify(payload)
           });
 
           const data = await readJsonSafe(resp);
@@ -2950,15 +3117,16 @@
           closeCheckout();
           setLastOrderId(data.order_id);
           openPrintUrl(`/api/orders/${data.order_id}/print?prices=1`);
+ 
+           cart.clear();
+           renderCart();
+           resetPaymentSplitState(0);
+           clearCheckoutCashFields();
+           activeReceivableId = null;
+         }
 
-          cart.clear();
-          renderCart();
-          resetPaymentSplitState(0);
-          activeReceivableId = null;
-        }
-
-      } catch (e){
-        toast("Erro ao salvar/imprimir: " + e.message, "error", { detail: e?.stack || e?.message });
+       } catch (e){
+         toast("Erro ao salvar/imprimir: " + e.message, "error", { detail: e?.stack || e?.message });
       } finally {
         setButtonLoading(els.checkoutConfirm, false);
       }

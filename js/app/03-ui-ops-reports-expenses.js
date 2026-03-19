@@ -42,6 +42,7 @@
       companyLogoRemoveBtn: document.getElementById("companyLogoRemoveBtn"),
       companyLogoFileInput: document.getElementById("companyLogoFileInput"),
       autoBackupToggle: document.getElementById("autoBackupToggle"),
+      themeLoginBgToggle: document.getElementById("themeLoginBgToggle"),
       diagInfo: document.getElementById("diagInfo"),
       diagRefreshBtn: document.getElementById("diagRefreshBtn"),
       logClearBtn: document.getElementById("logClearBtn"),
@@ -229,6 +230,10 @@
       paymentSplitHint: document.getElementById("paymentSplitHint"),
       paymentBlock: document.getElementById("paymentBlock"),
       paymentRow: document.getElementById("paymentRow"),
+      checkoutCashWrap: document.getElementById("checkoutCashWrap"),
+      checkoutCashReceived: document.getElementById("checkoutCashReceived"),
+      checkoutCashChange: document.getElementById("checkoutCashChange"),
+      checkoutCashHint: document.getElementById("checkoutCashHint"),
       checkoutTotal: document.getElementById("checkoutTotal"),
 
       // Mesas/Cozinha
