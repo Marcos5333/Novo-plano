@@ -41,14 +41,13 @@
       }
 
       function demoCreateBaseDb(){
-        const now = demoNowIso();
         return {
           version: 1,
           seq: { order: 1, item: 1, movement: 1 },
           meta: {
             last_order_number: 0,
-            cash_status: "ABERTO",
-            cash_opened_at: now,
+            cash_status: "FECHADO",
+            cash_opened_at: "",
             cash_opening_amount: 0,
             cash_last_opened_at: "",
             cash_last_closed_at: "",
@@ -201,13 +200,26 @@
           const amount = Number(row?.amount);
           if (!method) continue;
           if (!Number.isFinite(amount) || amount <= 0) continue;
+          const cashReceived = Number(row?.cash_received);
+          const cashChange = Number(row?.cash_change);
           out.push({
             person_name: String(row?.person_name || "").trim(),
             method,
             amount: roundMoney(amount),
+            cash_received: Number.isFinite(cashReceived) ? roundMoney(Math.max(0, cashReceived)) : null,
+            cash_change: Number.isFinite(cashChange) ? roundMoney(Math.max(0, cashChange)) : null,
           });
         }
         return out;
+      }
+
+      function demoIsCashOpen(db){
+        return String(db?.meta?.cash_status || "").toUpperCase() === "ABERTO";
+      }
+
+      function demoEnsureCashOpen(db, action = "registrar o pedido"){
+        if (demoIsCashOpen(db)) return null;
+        return demoError(`Caixa fechado. Abra o caixa para ${action}.`, 400);
       }
 
       function demoOrderTotal(db, orderId){
@@ -387,7 +399,7 @@
         if (["day", "daily", "diario"].includes(p)) {
           return {
             key: "day",
-            title: "Relatorio Diario (Demo Storage)",
+            title: "Relatório Diário",
             start: new Date(y, m, d, 0, 0, 0, 0),
             end: new Date(y, m, d, 23, 59, 59, 999),
           };
@@ -395,7 +407,7 @@
         if (["month", "monthly", "mensal"].includes(p)) {
           return {
             key: "month",
-            title: "Relatorio Mensal (Demo Storage)",
+            title: "Relatório Mensal",
             start: new Date(y, m, 1, 0, 0, 0, 0),
             end: new Date(y, m + 1, 0, 23, 59, 59, 999),
           };
@@ -403,7 +415,7 @@
         if (["year", "yearly", "annual", "anual"].includes(p)) {
           return {
             key: "year",
-            title: "Relatorio Anual (Demo Storage)",
+            title: "Relatório Anual",
             start: new Date(y, 0, 1, 0, 0, 0, 0),
             end: new Date(y, 11, 31, 23, 59, 59, 999),
           };
@@ -417,7 +429,7 @@
         if (!dayMatch){
           return {
             key: "cash",
-            title: "Relatorio de Caixa (Demo Storage)",
+            title: "Relatório de Caixa",
             start: db.meta.cash_last_opened_at || db.meta.cash_opened_at || new Date(0).toISOString(),
             end: db.meta.cash_last_closed_at || demoNowIso(),
           };
@@ -440,7 +452,7 @@
           const endIso = lastEnd || new Date(y, m, d, 23, 59, 59, 999).toISOString();
           return {
             key: "cash",
-            title: `Relatorio de Caixa - ${dayLabel} (Fechamento)`,
+            title: `Relatório de Caixa - ${dayLabel} (Fechamento)`,
             start: startIso,
             end: endIso,
           };
@@ -448,7 +460,7 @@
 
         return {
           key: "cash",
-          title: `Relatorio de Caixa - ${dayLabel}`,
+          title: `Relatório de Caixa - ${dayLabel}`,
           start: new Date(y, m, d, 0, 0, 0, 0).toISOString(),
           end: new Date(y, m, d, 23, 59, 59, 999).toISOString(),
         };
@@ -474,8 +486,8 @@
       width:72mm;
       font-size:11px;
       line-height:1.25;
-      word-break: break-word;
-      overflow-wrap: anywhere;
+      word-break: normal;
+      overflow-wrap: break-word;
     }
     h1{margin:0 0 6px 0;font-size:14px}
     .muted{opacity:.72}
@@ -484,6 +496,9 @@
     th,td{border-bottom:1px solid #eee;padding:4px;text-align:left;vertical-align:top}
     th:last-child,td:last-child{text-align:right}
     .hr{border-top:1px dashed #999;margin:8px 0}
+    .amount,.nowrap{white-space:nowrap;word-break:keep-all;overflow-wrap:normal}
+    .summaryRow{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+    .summaryRow + .summaryRow{margin-top:4px}
   </style>
 </head>
 <body>
@@ -495,14 +510,23 @@ ${bodyHtml}
 
       function demoBuildOrderPrintHtml(order, items){
         const dt = order?.created_at ? new Date(order.created_at).toLocaleString("pt-BR") : "-";
-        const total = items.reduce((acc, it) => acc + (Number(it.qty || 0) * Number(it.unit_price || 0)), 0);
+        const subtotal = roundMoney(items.reduce((acc, it) => acc + (Number(it.qty || 0) * Number(it.unit_price || 0)), 0));
+        const discount = roundMoney(Number(order?.discount || 0));
+        const fee = roundMoney(Number(order?.fee || 0));
+        const totalRaw = Number(order?.total);
+        const total = Number.isFinite(totalRaw) && totalRaw > 0
+          ? roundMoney(totalRaw)
+          : roundMoney(Math.max(0, subtotal - discount + fee));
         const splits = demoNormalizePaymentSplits(order);
         const paymentSummary = splits.length
           ? "DIVIDIDO"
           : String(order?.payment_method || "-").toUpperCase();
         const splitRows = splits.map((split, idx) => {
           const person = split.person_name || `Pessoa ${idx + 1}`;
-          return `<div class="muted">• ${escapeHtml(person)} • ${escapeHtml(paymentMethodLabel(split.method).toUpperCase())}: ${escapeHtml(brl(split.amount || 0))}</div>`;
+          const cashDetail = split.method === "dinheiro" && Number(split.cash_change || 0) > 0
+            ? ` • Recebido ${brl(split.cash_received || split.amount || 0)} • Troco ${brl(split.cash_change || 0)}`
+            : "";
+          return `<div class="muted">• ${escapeHtml(person)} • ${escapeHtml(paymentMethodLabel(split.method).toUpperCase())}: ${escapeHtml(brl(split.amount || 0))}${cashDetail ? ` ${escapeHtml(cashDetail)}` : ""}</div>`;
         }).join("");
         const rows = items.map((it) => {
           const qty = Number(it.qty || 0);
@@ -516,7 +540,7 @@ ${bodyHtml}
                 <div class="muted">Unitário: ${escapeHtml(brl(unit))}</div>
                 ${notes ? `<div class="muted">Obs: ${escapeHtml(notes)}</div>` : ""}
               </td>
-              <td>${escapeHtml(brl(line))}</td>
+              <td class="amount">${escapeHtml(brl(line))}</td>
             </tr>
           `;
         }).join("");
@@ -525,7 +549,7 @@ ${bodyHtml}
           `Comanda #${order?.order_number || "-"}`,
           `
             <h1>Comanda #${escapeHtml(String(order?.order_number || "-"))}</h1>
-            <p class="muted">Demo Storage (sem SQLite) - ${escapeHtml(dt)}</p>
+            <p class="muted">Impresso em ${escapeHtml(dt)}</p>
             <div class="box">
               <div><b>Tipo:</b> ${escapeHtml(String(order?.order_type || "-").toUpperCase())}</div>
               <div><b>Mesa:</b> ${escapeHtml(order?.table_no || "-")}</div>
@@ -539,7 +563,13 @@ ${bodyHtml}
                 <tbody>${rows || `<tr><td colspan="2">Sem itens</td></tr>`}</tbody>
               </table>
             </div>
-            <div class="box"><b>Total:</b> ${escapeHtml(brl(total))}</div>
+            <div class="box">
+              <div class="summaryRow"><b>Subtotal:</b><span class="amount">${escapeHtml(brl(subtotal))}</span></div>
+              <div class="summaryRow"><b>Desconto:</b><span class="amount">${escapeHtml(brl(discount))}</span></div>
+              <div class="summaryRow"><b>Taxa:</b><span class="amount">${escapeHtml(brl(fee))}</span></div>
+              <div class="hr"></div>
+              <div class="summaryRow"><b>Valor total:</b><span class="amount"><b>${escapeHtml(brl(total))}</b></span></div>
+            </div>
           `
         );
       }
@@ -610,7 +640,10 @@ ${bodyHtml}
           const splitHtml = splits.length
             ? splits.map((split, idx) => {
                 const person = String(split?.person_name || "").trim() || `Pessoa ${idx + 1}`;
-                return `<div class="muted">  • ${escapeHtml(person)}: ${escapeHtml(paymentMethodLabel(split.method))} ${escapeHtml(brl(split.amount || 0))}</div>`;
+                const cashDetail = split.method === "dinheiro" && Number(split.cash_change || 0) > 0
+                  ? ` • Recebido ${brl(split.cash_received || split.amount || 0)} • Troco ${brl(split.cash_change || 0)}`
+                  : "";
+                return `<div class="muted">  • ${escapeHtml(person)}: ${escapeHtml(paymentMethodLabel(split.method))} ${escapeHtml(brl(split.amount || 0))}${cashDetail ? ` ${escapeHtml(cashDetail)}` : ""}</div>`;
               }).join("")
             : "";
           const items = Array.isArray(r.items) ? r.items : [];
@@ -1058,7 +1091,13 @@ ${bodyHtml}
             const saleRows = (Array.isArray(report.rows) ? report.rows : []).map((order) => {
               const splits = Array.isArray(order?.payment_splits) ? order.payment_splits : [];
               const paymentDesc = splits.length
-                ? splits.map((split) => `${paymentMethodLabel(split.method)} ${brl(Number(split.amount || 0))}`).join(" + ")
+                ? splits.map((split) => {
+                    const amountText = `${paymentMethodLabel(split.method)} ${brl(Number(split.amount || 0))}`;
+                    if (split.method === "dinheiro" && Number(split.cash_change || 0) > 0){
+                      return `${amountText} (troco ${brl(Number(split.cash_change || 0))})`;
+                    }
+                    return amountText;
+                  }).join(" + ")
                 : paymentMethodLabel(order?.payment_method || "");
               const type = String(order?.order_type || "").trim().toUpperCase() || "-";
               const tableNo = String(order?.table_no || "").trim();
@@ -1214,6 +1253,9 @@ ${bodyHtml}
         }
 
         if (method === "POST" && path === "/api/receivables/open"){
+          const cashError = demoEnsureCashOpen(db, "abrir o fiado");
+          if (cashError) return cashError;
+
           const payload = demoParseJsonBody(init);
           const customerName = String(payload?.customer_name || "").trim();
           if (!customerName) return demoError("Informe o nome do cliente", 400);
@@ -1307,6 +1349,39 @@ ${bodyHtml}
           return demoJson({ ok: true, rows });
         }
 
+        if (method === "GET" && path === "/api/kitchen/history"){
+          const date = String(urlObj.searchParams.get("date") || demoDayKeyFromIso(demoNowIso())).trim();
+          const start = new Date(`${date}T00:00:00`);
+          const end = new Date(`${date}T23:59:59.999`);
+          const startTs = start.getTime();
+          const endTs = end.getTime();
+          const orderById = new Map(db.orders.map((o) => [Number(o.id), o]));
+          const rows = db.order_items
+            .filter((it) => Number(it.is_kitchen) === 1 && String(it.status || "").toUpperCase() === "PRONTO")
+            .map((it) => {
+              const order = orderById.get(Number(it.order_id));
+              if (!order) return null;
+              const readyAt = String(it.ready_at || order.created_at || demoNowIso());
+              const ts = new Date(readyAt).getTime();
+              if (!Number.isFinite(ts) || ts < startTs || ts > endTs) return null;
+              return {
+                id: Number(it.id),
+                order_id: Number(it.order_id),
+                name: String(it.name || "Item"),
+                qty: Number(it.qty || 1),
+                notes: String(it.notes || ""),
+                order_number: Number(order.order_number || 0),
+                table_no: String(order.table_no || ""),
+                order_type: String(order.order_type || ""),
+                created_at: order.created_at || demoNowIso(),
+                ready_at: readyAt,
+              };
+            })
+            .filter(Boolean)
+            .sort((a, b) => new Date(String(b.ready_at || "")).getTime() - new Date(String(a.ready_at || "")).getTime());
+          return demoJson({ ok: true, rows });
+        }
+
         if (method === "GET" && path === "/api/orders/day"){
           const date = urlObj.searchParams.get("date");
           if (!date) return demoError("Informe a data", 400);
@@ -1388,6 +1463,34 @@ ${bodyHtml}
           return demoJson({ ok: true, rows });
         }
 
+        if (method === "GET" && path === "/api/delivery/history"){
+          const date = String(urlObj.searchParams.get("date") || demoDayKeyFromIso(demoNowIso())).trim();
+          const start = new Date(`${date}T00:00:00`);
+          const end = new Date(`${date}T23:59:59.999`);
+          const startTs = start.getTime();
+          const endTs = end.getTime();
+          const rows = db.orders
+            .filter((o) => {
+              if (String(o.order_type || "") !== "entrega") return false;
+              if (String(o.delivery_status || "").toUpperCase() !== "FINALIZADO") return false;
+              const finishedAt = String(o.delivery_finalized_at || o.created_at || "");
+              const ts = new Date(finishedAt).getTime();
+              return Number.isFinite(ts) && ts >= startTs && ts <= endTs;
+            })
+            .map((o) => ({
+              id: Number(o.id),
+              order_number: Number(o.order_number || 0),
+              created_at: o.created_at || demoNowIso(),
+              customer_name: String(o.customer_name || ""),
+              address: String(o.address || ""),
+              total: demoOrderTotal(db, o.id),
+              delivery_status: String(o.delivery_status || "FINALIZADO"),
+              delivery_finalized_at: String(o.delivery_finalized_at || o.created_at || demoNowIso()),
+            }))
+            .sort((a, b) => new Date(String(b.delivery_finalized_at || "")).getTime() - new Date(String(a.delivery_finalized_at || "")).getTime());
+          return demoJson({ ok: true, rows });
+        }
+
         const orderGetMatch = path.match(/^\/api\/orders\/(\d+)$/);
         if (method === "GET" && orderGetMatch){
           const id = Number(orderGetMatch[1]);
@@ -1403,6 +1506,7 @@ ${bodyHtml}
           const item = db.order_items.find((it) => Number(it.id) === id);
           if (!item) return demoError("Item nao encontrado", 400);
           item.status = "PRONTO";
+          item.ready_at = demoNowIso();
           demoSaveDb(db);
           return demoJson({ ok: true });
         }
@@ -1413,6 +1517,7 @@ ${bodyHtml}
           const order = db.orders.find((o) => Number(o.id) === id);
           if (!order) return demoError("Pedido nao encontrado", 404);
           order.delivery_status = "DESPACHADO";
+          order.delivery_dispatched_at = demoNowIso();
           demoSaveDb(db);
           return demoJson({ ok: true });
         }
@@ -1423,6 +1528,7 @@ ${bodyHtml}
           const order = db.orders.find((o) => Number(o.id) === id);
           if (!order) return demoError("Pedido nao encontrado", 404);
           order.delivery_status = "FINALIZADO";
+          order.delivery_finalized_at = demoNowIso();
           demoSaveDb(db);
           return demoJson({ ok: true });
         }
@@ -1433,6 +1539,8 @@ ${bodyHtml}
           const payload = demoParseJsonBody(init);
           const order = db.orders.find((o) => Number(o.id) === id);
           if (!order) return demoError("Pedido nao encontrado", 404);
+          const cashError = demoEnsureCashOpen(db, "finalizar a venda");
+          if (cashError) return cashError;
           if (String(order.status || "").toUpperCase() !== "ABERTO") {
             return demoError("Pedido ja esta fechado", 400);
           }
@@ -1447,6 +1555,10 @@ ${bodyHtml}
           order.notes = payload.notes || order.notes || "";
           order.payment_method = payment;
           order.payment_splits = demoNormalizePaymentSplits({ payment_splits: payload.payment_splits });
+          order.subtotal = Number(payload?.totals?.subtotal ?? order.subtotal ?? 0);
+          order.discount = Number(payload?.totals?.discount ?? order.discount ?? 0);
+          order.fee = Number(payload?.totals?.fee ?? order.fee ?? 0);
+          order.total = Number(payload?.totals?.total ?? demoOrderTotal(db, id));
           order.status = "FECHADO";
 
           demoSaveDb(db);
@@ -1454,6 +1566,9 @@ ${bodyHtml}
         }
 
         if (method === "POST" && path === "/api/orders"){
+          const cashError = demoEnsureCashOpen(db, "registrar o pedido");
+          if (cashError) return cashError;
+
           const payload = demoParseJsonBody(init);
           const items = Array.isArray(payload?.items) ? payload.items : [];
           if (items.length === 0) return demoError("Carrinho vazio", 400);
@@ -1571,14 +1686,14 @@ ${bodyHtml}
           return demoJson({
             ok: true,
             app: {
-              version: "demo-storage",
-              node: "n/a",
-              platform: "web",
-              arch: navigator.platform || "browser",
+              version: "app-local",
+              runtime: "Navegador",
+              platform: "Web",
+              arch: navigator.platform || "Browser",
               uptime: Number((performance.now() / 1000).toFixed(0)),
             },
             db: {
-              path: `localStorage:${DEMO_DB_KEY}`,
+              label: "Base local do aplicativo",
               size,
               orders: db.orders.length,
               items: db.order_items.length,

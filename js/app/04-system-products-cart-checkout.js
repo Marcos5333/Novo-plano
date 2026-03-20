@@ -203,6 +203,236 @@
         scheduleAutoCashClose();
       }, delay);
     }
+
+    const PRINT_SETTINGS_KEY = "mvs_print_settings_v1";
+    const DEFAULT_PRINT_SETTINGS = Object.freeze({
+      mode: "preview",
+      printer_name: "",
+      auto_order_print: false,
+    });
+
+    function normalizePrintSettings(raw){
+      const source = (raw && typeof raw === "object") ? raw : {};
+      const mode = String(source.mode || DEFAULT_PRINT_SETTINGS.mode).trim().toLowerCase() === "auto_browser"
+        ? "auto_browser"
+        : "preview";
+      return {
+        mode,
+        printer_name: String(source.printer_name || "").trim(),
+        auto_order_print: !!source.auto_order_print,
+      };
+    }
+
+    function loadPrintSettings(){
+      try{
+        const raw = localStorage.getItem(PRINT_SETTINGS_KEY);
+        return normalizePrintSettings(raw ? JSON.parse(raw) : DEFAULT_PRINT_SETTINGS);
+      } catch {
+        return { ...DEFAULT_PRINT_SETTINGS };
+      }
+    }
+
+    let printSettings = loadPrintSettings();
+
+    function savePrintSettings(nextSettings){
+      printSettings = normalizePrintSettings(nextSettings);
+      try{
+        localStorage.setItem(PRINT_SETTINGS_KEY, JSON.stringify(printSettings));
+      } catch {
+        // ignore persistence failures
+      }
+      renderPrinterSettingsUi();
+      return printSettings;
+    }
+
+    function printerModeLabel(mode = printSettings.mode){
+      return mode === "auto_browser"
+        ? "Automática (impressora padrão do Windows)"
+        : "Pré-visualização manual";
+    }
+
+    function printerDisplayName(settings = printSettings){
+      const name = String(settings?.printer_name || "").trim();
+      if (name) return name;
+      return settings?.mode === "auto_browser" ? "Padrão do Windows" : "Pré-visualização manual";
+    }
+
+    function shouldAutoPrintOrders(){
+      return printSettings.mode === "auto_browser" && !!printSettings.auto_order_print;
+    }
+
+    function renderPrinterStatus(settings = printSettings){
+      if (els.printerStatus){
+        const autoLabel = settings.mode === "auto_browser" && settings.auto_order_print ? "Ativada" : "Desligada";
+        els.printerStatus.textContent = [
+          `Modo: ${printerModeLabel(settings.mode)}`,
+          `Impressora: ${printerDisplayName(settings)}`,
+          `Autoimpressão de pedidos: ${autoLabel}`,
+        ].join("\n");
+      }
+    }
+
+    function previewPrinterSettingsFromUi(){
+      return normalizePrintSettings({
+        mode: els.printerModeSelect?.value,
+        printer_name: els.printerNameInput?.value,
+        auto_order_print: !!els.printerAutoToggle?.checked,
+      });
+    }
+
+    function renderPrinterSettingsUi(){
+      if (els.printerModeSelect) els.printerModeSelect.value = printSettings.mode;
+      if (els.printerNameInput) els.printerNameInput.value = printSettings.printer_name || "";
+      if (els.printerAutoToggle) els.printerAutoToggle.checked = !!printSettings.auto_order_print;
+      renderPrinterStatus(printSettings);
+    }
+
+    function savePrinterSettingsFromUi(){
+      if (!requireManager()) return;
+      const next = savePrintSettings({
+        mode: String(els.printerModeSelect?.value || DEFAULT_PRINT_SETTINGS.mode),
+        printer_name: String(els.printerNameInput?.value || "").trim(),
+        auto_order_print: !!els.printerAutoToggle?.checked,
+      });
+      toast(`Configuração de impressão salva: ${printerModeLabel(next.mode)}.`, "success");
+      loadDiagnostics();
+    }
+
+    function buildPrinterTestHtml(){
+      const when = new Date().toLocaleString("pt-BR");
+      const printerName = printerDisplayName(printSettings);
+      return `
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Teste de Impressão</title>
+  <style>
+    @page{ size: 80mm auto; margin:4mm; }
+    body{
+      font-family:"Courier New", Courier, monospace;
+      margin:0 auto;
+      width:72mm;
+      color:#111;
+      font-size:11px;
+      line-height:1.3;
+    }
+    h1{margin:0 0 8px 0;font-size:14px}
+    .box{border:1px solid #ddd;border-radius:6px;padding:8px;margin:8px 0}
+    .row{display:flex;justify-content:space-between;gap:8px}
+    .amount{white-space:nowrap}
+  </style>
+</head>
+<body>
+  <h1>Teste de Impressão</h1>
+  <div class="box">
+    <div><b>Data:</b> ${escapeHtml(when)}</div>
+    <div><b>Modo:</b> ${escapeHtml(printerModeLabel(printSettings.mode))}</div>
+    <div><b>Impressora:</b> ${escapeHtml(printerName)}</div>
+  </div>
+  <div class="box">
+    <div class="row"><span>Item teste</span><span class="amount">R$ 2,90</span></div>
+    <div class="row"><span>Valor total</span><span class="amount"><b>R$ 2,90</b></span></div>
+  </div>
+</body>
+</html>
+      `.trim();
+    }
+
+    function autoPrintHtmlBestEffort(html){
+      return new Promise((resolve, reject) => {
+        const frame = document.createElement("iframe");
+        frame.setAttribute("aria-hidden", "true");
+        frame.style.position = "fixed";
+        frame.style.right = "-10000px";
+        frame.style.bottom = "0";
+        frame.style.width = "1px";
+        frame.style.height = "1px";
+        frame.style.opacity = "0";
+        frame.style.pointerEvents = "none";
+
+        let finished = false;
+        const cleanup = () => {
+          window.setTimeout(() => frame.remove(), 300);
+        };
+        const done = (error = null) => {
+          if (finished) return;
+          finished = true;
+          cleanup();
+          if (error) reject(error);
+          else resolve();
+        };
+
+        frame.addEventListener("load", () => {
+          const win = frame.contentWindow;
+          if (!win){
+            done(new Error("Pré-visualização indisponível para imprimir."));
+            return;
+          }
+          try{
+            win.onafterprint = () => done();
+            window.setTimeout(() => {
+              try{
+                win.focus();
+                win.print();
+                window.setTimeout(() => done(), 1800);
+              } catch (err){
+                done(err instanceof Error ? err : new Error(String(err || "Falha ao imprimir")));
+              }
+            }, 120);
+          } catch (err){
+            done(err instanceof Error ? err : new Error(String(err || "Falha ao preparar impressão")));
+          }
+        }, { once: true });
+
+        document.body.appendChild(frame);
+        frame.srcdoc = html;
+      });
+    }
+
+    async function fetchPrintHtml(url){
+      const resp = await fetch(url, { method: "GET" });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const html = await resp.text();
+      if (!html) throw new Error("Resposta vazia do servidor.");
+      return html;
+    }
+
+    async function openPrintUrlSmart(url, opts = {}){
+      const html = await fetchPrintHtml(url);
+      const shouldAuto = !!opts.auto && shouldAutoPrintOrders();
+      if (!shouldAuto){
+        openPrintModal(html);
+        return { auto: false };
+      }
+      try{
+        await autoPrintHtmlBestEffort(html);
+        toast("Impressão enviada automaticamente.", "success");
+        return { auto: true };
+      } catch (e){
+        openPrintModal(html);
+        toast("Não foi possível enviar direto para a impressora. Abrindo pré-visualização.", "info");
+        return { auto: false, fallback: true, error: e };
+      }
+    }
+
+    async function testPrinterOutput(){
+      const html = buildPrinterTestHtml();
+      if (printSettings.mode === "auto_browser"){
+        try{
+          await autoPrintHtmlBestEffort(html);
+          toast("Teste enviado para impressão.", "success");
+          return;
+        } catch (e){
+          openPrintModal(html);
+          toast("Falha no envio automático. Pré-visualização aberta para conferência.", "info");
+          return;
+        }
+      }
+      openPrintModal(html);
+    }
+
     async function loadDiagnostics(){
       if (!els.diagInfo) return;
       setButtonLoading(els.diagRefreshBtn, true);
@@ -212,15 +442,18 @@
         if (!resp.ok || data?.ok === false) throw new Error(data?.error || "Erro");
 
         const lines = [
-          `Versão: ${data?.app?.version || "-"}`,
-          `Node: ${data?.app?.node || "-"}`,
+          `Versão do app: ${data?.app?.version || "-"}`,
+          `Ambiente: ${data?.app?.runtime || "Navegador"}`,
           `Plataforma: ${data?.app?.platform || "-"} / ${data?.app?.arch || "-"}`,
-          `Uptime: ${Math.round(Number(data?.app?.uptime || 0))}s`,
-          `DB: ${data?.db?.path || "-"}`,
-          `DB tamanho: ${formatBytes(data?.db?.size || 0)}`,
+          `Tempo ativo: ${Math.round(Number(data?.app?.uptime || 0))}s`,
+          `Base atual: ${data?.db?.label || "Aplicativo local"}`,
+          `Dados ocupados: ${formatBytes(data?.db?.size || 0)}`,
           `Pedidos: ${data?.db?.orders ?? "-"}`,
           `Itens: ${data?.db?.items ?? "-"}`,
+          `Movimentações: ${data?.db?.movements ?? "-"}`,
           `Caixa: ${data?.db?.cash_status || "-"}`,
+          `Impressão: ${printerModeLabel(printSettings.mode)}`,
+          `Impressora: ${printerDisplayName(printSettings)}`,
           `Último backup: ${data?.db?.last_backup_at ? new Date(data.db.last_backup_at).toLocaleString("pt-BR") : "-"}`
         ];
 
@@ -248,6 +481,11 @@
       return prettyCatLabel(key);
     }
 
+    function storedAddonCategoryHasExtras(key){
+      const list = Array.isArray(categoryAddons?.[key]) ? categoryAddons[key] : [];
+      return list.some((entry) => String(entry?.name || "").toLowerCase() !== "sem adicional");
+    }
+
     function renderAddonCategorySelect(){
       if (!els.addonCategorySelect) return;
       const current = String(els.addonCategorySelect.value || "").trim().toLowerCase();
@@ -256,7 +494,10 @@
         if (c?.id) keys.add(String(c.id).trim().toLowerCase());
       }
       for (const k of Object.keys(categoryAddons || {})){
-        if (k) keys.add(String(k).trim().toLowerCase());
+        const key = String(k || "").trim().toLowerCase();
+        if (!key || key === "_default") continue;
+        if (!storedAddonCategoryHasExtras(key)) continue;
+        keys.add(key);
       }
 
       const sorted = Array.from(keys).filter(Boolean).sort((a, b) => {
@@ -271,6 +512,7 @@
 
       const next = sorted.includes(current) ? current : (sorted[0] || "_default");
       els.addonCategorySelect.value = next;
+      syncAddonCategoryDeleteState();
     }
 
     function renderAddonList(){
@@ -301,6 +543,25 @@
       `;
       }).join("");
       applyRoleLocks();
+      syncAddonCategoryDeleteState();
+    }
+
+    function categoryHasExtraAddons(categoryKey){
+      const list = addonOptionsForCategory(categoryKey);
+      return list.some((entry) => String(entry?.name || "").toLowerCase() !== "sem adicional");
+    }
+
+    function syncAddonCategoryDeleteState(){
+      if (!els.addonCategoryDeleteBtn || !els.addonCategorySelect) return;
+      const selectedCategory = String(els.addonCategorySelect.value || "_default").trim().toLowerCase();
+      const categoryId = (typeof resolveAddonCategoryKey === "function")
+        ? resolveAddonCategoryKey(selectedCategory)
+        : selectedCategory;
+      const canClear = categoryId !== "_default" && categoryHasExtraAddons(selectedCategory);
+      els.addonCategoryDeleteBtn.disabled = !canClear || !isManager();
+      els.addonCategoryDeleteBtn.title = canClear
+        ? "Remove os acompanhamentos extras desta categoria e mantém apenas 'Sem adicional'."
+        : "Esta categoria já está sem acompanhamentos extras.";
     }
 
     function refreshAddonManager(){
@@ -349,6 +610,37 @@
       if (els.addonPriceInput) els.addonPriceInput.value = "";
       els.addonNameInput.focus();
       toast("Acompanhamento adicionado.", "success");
+    }
+
+    async function clearAddonCategoryFromEditor(){
+      if (!requireManager()) return;
+      if (!els.addonCategorySelect) return;
+
+      const selectedCategory = String(els.addonCategorySelect.value || "_default").trim().toLowerCase();
+      const categoryId = (typeof resolveAddonCategoryKey === "function")
+        ? resolveAddonCategoryKey(selectedCategory)
+        : selectedCategory;
+      const label = addonCategoryLabel(categoryId);
+
+      if (categoryId === "_default"){
+        toast("A categoria padrão não pode ser removida.", "info");
+        return;
+      }
+      if (!categoryHasExtraAddons(selectedCategory)){
+        toast("Essa categoria já está sem acompanhamentos extras.", "info");
+        return;
+      }
+
+      const ok = await openConfirmModal({
+        title: "Excluir categoria de acompanhamentos",
+        message: `Remover todos os acompanhamentos extras de "${label}" e manter apenas "Sem adicional"?`
+      });
+      if (!ok) return;
+
+      categoryAddons[categoryId] = [{ name: "Sem adicional", price: 0 }];
+      saveCategoryAddons(categoryAddons);
+      refreshAddonManager();
+      toast("Categoria limpa com sucesso.", "success");
     }
 
     async function removeAddonFromEditor(nameRaw){
@@ -637,6 +929,7 @@
       closeOtherModals();
       renderLogs();
       loadDiagnostics();
+      renderPrinterSettingsUi();
       renderCompanyBrandCard();
       updateMiniStatus();
       updateSystemLock();
@@ -943,6 +1236,7 @@
     }
 
     renderCompanyBrandCard();
+    renderPrinterSettingsUi();
     if (els.companyNameSaveBtn) els.companyNameSaveBtn.addEventListener("click", saveCompanyNameFromInput);
     if (els.companyNameInput) els.companyNameInput.addEventListener("keydown", (e) => {
       if (e.key !== "Enter") return;
@@ -974,8 +1268,20 @@
       }
     });
     if (els.companyLogoRemoveBtn) els.companyLogoRemoveBtn.addEventListener("click", removeCompanyLogo);
+    if (els.printerSaveBtn) els.printerSaveBtn.addEventListener("click", savePrinterSettingsFromUi);
+    if (els.printerTestBtn) els.printerTestBtn.addEventListener("click", testPrinterOutput);
+    if (els.printerModeSelect) els.printerModeSelect.addEventListener("change", () => {
+      renderPrinterStatus(previewPrinterSettingsFromUi());
+    });
+    if (els.printerNameInput) els.printerNameInput.addEventListener("input", () => {
+      renderPrinterStatus(previewPrinterSettingsFromUi());
+    });
+    if (els.printerAutoToggle) els.printerAutoToggle.addEventListener("change", () => {
+      renderPrinterStatus(previewPrinterSettingsFromUi());
+    });
 
     if (els.addonCategorySelect) els.addonCategorySelect.addEventListener("change", renderAddonList);
+    if (els.addonCategoryDeleteBtn) els.addonCategoryDeleteBtn.addEventListener("click", clearAddonCategoryFromEditor);
     if (els.addonAddBtn) els.addonAddBtn.addEventListener("click", addAddonFromEditor);
     if (els.addonNameInput) els.addonNameInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter"){
@@ -1441,6 +1747,9 @@
       if (!b) return;
       if (emojiTargetInput){
         emojiTargetInput.value = b.dataset.emoji || "";
+        const row = emojiTargetInput.closest?.(".catRow");
+        const preview = row?.querySelector?.(".catPreview");
+        if (preview) preview.textContent = emojiTargetInput.value.trim() || "🏷️";
         emojiTargetInput.focus();
       }
       closeEmojiModal();
@@ -1450,6 +1759,16 @@
       if (saveCategoryEdits()) closeCategoryModal();
     });
     if (els.categoryList) els.categoryList.addEventListener("click", async (e) => {
+      const emojiBtn = e.target.closest("button[data-action='emoji']");
+      if (emojiBtn){
+        if (!requireManager()) return;
+        const row = emojiBtn.closest(".catRow");
+        const input = row?.querySelector('[data-field="emoji"]');
+        if (!input) return;
+        openEmojiModal(input);
+        return;
+      }
+
       const btn = e.target.closest("button[data-action='del']");
       if (!btn) return;
       if (!requireManager()) return;
@@ -1472,6 +1791,13 @@
       } else {
         toast("Categoria removida.", "success");
       }
+    });
+    if (els.categoryList) els.categoryList.addEventListener("input", (e) => {
+      const input = e.target.closest('input[data-field="emoji"]');
+      if (!input) return;
+      const row = input.closest(".catRow");
+      const preview = row?.querySelector(".catPreview");
+      if (preview) preview.textContent = input.value.trim() || "🏷️";
     });
     els.productClose.addEventListener("click", closeProductModal);
     els.productCancel.addEventListener("click", closeProductModal);
@@ -1606,6 +1932,11 @@
       els.pizzaAddon.value = String(safeIndex);
     }
 
+    function syncPizzaFlavorFields(){
+      if (!els.pizzaFlavor2Field) return;
+      els.pizzaFlavor2Field.style.display = pizzaState.half ? "grid" : "none";
+    }
+
     function updatePizzaPrice(){
       const f1 = products.find(p => p.id === pizzaState.flavor1Id);
       const f2 = products.find(p => p.id === pizzaState.flavor2Id);
@@ -1657,6 +1988,7 @@
       setSegActive(els.sizeSeg, "data-size", pizzaState.size);
       setSegActive(els.halfSeg, "data-half", "0");
 
+      syncPizzaFlavorFields();
       updatePizzaPrice();
       els.pizzaModal.style.display = "flex";
     }
@@ -1676,6 +2008,7 @@
       if (!b) return;
       pizzaState.half = b.dataset.half === "1";
       setSegActive(els.halfSeg, "data-half", pizzaState.half ? "1" : "0");
+      syncPizzaFlavorFields();
       updatePizzaPrice();
     });
 
@@ -1983,6 +2316,19 @@
       return count;
     }
 
+    function changeSplitPeople(delta){
+      const current = syncSplitPeopleInput();
+      const next = Math.min(20, Math.max(2, current + Number(delta || 0)));
+      if (els.paymentSplitPeople) els.paymentSplitPeople.value = String(next);
+      if (!els.paymentSplitToggle?.checked){
+        updatePaymentSplitHint(calcTotals().total);
+        return;
+      }
+      seedPaymentSplits(calcTotals().total, next);
+      renderPaymentSplits(calcTotals().total);
+      els.metaPay.textContent = getCheckoutPaymentMeta();
+    }
+
     function splitTotalEvenly(totalTarget, peopleCount){
       const count = Math.max(2, Number(peopleCount || 2));
       const cents = Math.max(0, Math.round(roundMoney(totalTarget) * 100));
@@ -2004,6 +2350,42 @@
       }, 0));
     }
 
+    function getSplitCashReceivedValue(split){
+      if (String(split?.method || "").trim().toLowerCase() !== "dinheiro") return null;
+      const raw = String(split?.cash_received || "").trim();
+      if (!raw) return null;
+      const value = parsePaymentAmountInput(raw);
+      return Number.isFinite(value) && value >= 0 ? roundMoney(value) : null;
+    }
+
+    function getSplitCashChangeValue(split){
+      if (String(split?.method || "").trim().toLowerCase() !== "dinheiro") return null;
+      const amount = parsePaymentAmountInput(split?.amount);
+      if (!Number.isFinite(amount) || amount < 0) return null;
+      const received = getSplitCashReceivedValue(split);
+      if (!Number.isFinite(received)) return 0;
+      return roundMoney(Math.max(0, received - amount));
+    }
+
+    function getSplitCashMissingValue(split){
+      if (String(split?.method || "").trim().toLowerCase() !== "dinheiro") return null;
+      const amount = parsePaymentAmountInput(split?.amount);
+      if (!Number.isFinite(amount) || amount < 0) return null;
+      const received = getSplitCashReceivedValue(split);
+      if (!Number.isFinite(received)) return 0;
+      return roundMoney(Math.max(0, amount - received));
+    }
+
+    function getPaymentSplitCashTotals(){
+      return paymentSplits.reduce((acc, split) => {
+        const change = getSplitCashChangeValue(split);
+        if (Number.isFinite(change) && change > 0){
+          acc.change += change;
+        }
+        return acc;
+      }, { change: 0 });
+    }
+
     function updatePaymentSplitHint(totalTarget){
       if (!els.paymentSplitHint) return;
       const target = roundMoney(totalTarget);
@@ -2012,13 +2394,45 @@
       const peopleCount = syncSplitPeopleInput();
       const peopleMismatch = paymentSplits.length !== peopleCount;
       const fewSplits = paymentSplits.length < 2;
+      const cashTotals = getPaymentSplitCashTotals();
 
       let text = `${peopleCount} pessoas: ${brl(total)} de ${brl(target)}`;
       if (fewSplits || peopleMismatch) text += " • ajuste a quantidade de pessoas";
       else if (mismatch) text += " • ajuste os valores";
+      if (cashTotals.change > 0) text += ` • troco total ${brl(cashTotals.change)}`;
 
       els.paymentSplitHint.textContent = text;
       els.paymentSplitHint.classList.toggle("paymentSplitHintMismatch", mismatch || fewSplits || peopleMismatch);
+    }
+
+    function splitCashHintText(split){
+      const method = String(split?.method || "").trim().toLowerCase();
+      if (method !== "dinheiro") return "";
+      const amount = parsePaymentAmountInput(split?.amount);
+      if (!Number.isFinite(amount) || amount <= 0) return "Informe o valor desta pessoa.";
+      const receivedRaw = String(split?.cash_received || "").trim();
+      if (!receivedRaw) return "Digite quanto esta pessoa entregou para calcular o troco.";
+      const received = getSplitCashReceivedValue(split);
+      if (!Number.isFinite(received)) return "Valor recebido inválido.";
+      const missing = getSplitCashMissingValue(split);
+      if (Number.isFinite(missing) && missing > 0) return `Falta ${brl(missing)}.`;
+      const change = getSplitCashChangeValue(split);
+      return change > 0 ? `Troco: ${brl(change)}.` : "Sem troco.";
+    }
+
+    function refreshPaymentSplitCardUi(card, split){
+      if (!card || !split) return;
+      const changeInput = card.querySelector(".splitChange");
+      if (changeInput){
+        const change = Math.max(0, Number(getSplitCashChangeValue(split) || 0));
+        changeInput.value = formatPaymentAmountInput(change);
+      }
+      const hintEl = card.querySelector(".splitCashHint");
+      if (hintEl){
+        const hint = splitCashHintText(split);
+        hintEl.textContent = hint;
+        hintEl.classList.toggle("splitCashHintError", hint.includes("Falta") || hint.includes("inválido"));
+      }
     }
 
     function renderPaymentSplits(totalTarget){
@@ -2034,8 +2448,16 @@
         const options = buildPaymentMethodOptions(method);
         const person = String(split.person_name || "");
         const amount = String(split.amount || "");
+        const cashReceived = String(split.cash_received || "");
+        const changeValue = getSplitCashChangeValue(split);
+        const showCashFields = method === "dinheiro";
+        const splitHint = splitCashHintText(split);
+        const splitHintClass = splitHint.includes("Falta") || splitHint.includes("inválido")
+          ? " splitCashHintError"
+          : "";
         return `
-          <div class="paymentSplitRow" data-split-id="${escapeAttr(split.id)}">
+          <div class="paymentSplitCard" data-split-id="${escapeAttr(split.id)}">
+            <div class="paymentSplitRow">
             <input
               class="splitPerson"
               data-field="person_name"
@@ -2050,6 +2472,31 @@
               placeholder="0,00"
               value="${escapeAttr(amount)}"
             />
+            </div>
+            ${showCashFields ? `
+              <div class="paymentSplitCashRow">
+                <div class="field">
+                  <label>Recebido</label>
+                  <input
+                    class="splitReceived"
+                    data-field="cash_received"
+                    inputmode="decimal"
+                    placeholder="0,00"
+                    value="${escapeAttr(cashReceived)}"
+                  />
+                </div>
+                <div class="field">
+                  <label>Troco</label>
+                  <input
+                    class="splitChange"
+                    data-field="cash_change"
+                    value="${escapeAttr(formatPaymentAmountInput(Math.max(0, Number(changeValue || 0))))}"
+                    readonly
+                  />
+                </div>
+              </div>
+              <div class="hint splitCashHint${splitHintClass}">${escapeHtml(splitHint)}</div>
+            ` : ""}
           </div>
         `;
       }).join("");
@@ -2066,7 +2513,8 @@
         id: uid(),
         person_name: `Pessoa ${idx + 1}`,
         method,
-        amount: amount > 0 ? formatPaymentAmountInput(amount) : ""
+        amount: amount > 0 ? formatPaymentAmountInput(amount) : "",
+        cash_received: "",
       }));
     }
 
@@ -2117,7 +2565,20 @@
         if (!Number.isFinite(amount) || amount <= 0){
           throw new Error(`Informe um valor válido para ${person}`);
         }
-        return { person_name: person, method, amount: roundMoney(amount) };
+        const normalizedRow = { person_name: person, method, amount: roundMoney(amount) };
+        if (method === "dinheiro"){
+          const rawReceived = String(split.cash_received || "").trim();
+          const received = rawReceived ? parsePaymentAmountInput(rawReceived) : roundMoney(amount);
+          if (!Number.isFinite(received) || received < 0){
+            throw new Error(`Informe um valor recebido válido para ${person}`);
+          }
+          if ((received + 0.009) < amount){
+            throw new Error(`O valor recebido de ${person} é menor que a parcela em dinheiro`);
+          }
+          normalizedRow.cash_received = roundMoney(received);
+          normalizedRow.cash_change = roundMoney(Math.max(0, received - amount));
+        }
+        return normalizedRow;
       });
 
       const sum = roundMoney(normalized.reduce((acc, split) => acc + split.amount, 0));
@@ -2375,7 +2836,19 @@
       stopExpensesLiveUpdates();
     }
 
-    function openCheckout(){
+    async function ensureCashOpenForCheckout(actionText = "seguir com a venda"){
+      try{
+        await syncCashFromServer();
+      } catch {
+        // usa o ultimo status conhecido se a sincronizacao falhar
+      }
+      if (shiftState.open) return true;
+      toast(`Caixa fechado. Abra o caixa para ${actionText}.`, "info");
+      return false;
+    }
+
+    async function openCheckout(){
+      if (!(await ensureCashOpenForCheckout("seguir com a venda"))) return;
       closeOtherModals();
       clearCheckoutInvalid();
       unlockCheckoutFields();
@@ -2392,9 +2865,9 @@
       unlockCheckoutFields();
     }
 
-    els.finishBtn.addEventListener("click", () => {
+    els.finishBtn.addEventListener("click", async () => {
       if (cart.size === 0){ toast("Carrinho vazio 😅", "info"); return; }
-      openCheckout();
+      await openCheckout();
     });
 
     els.checkoutClose.addEventListener("click", closeCheckout);
@@ -2952,10 +3425,16 @@
     if (els.paymentSplitPeople) els.paymentSplitPeople.addEventListener("input", () => {
       syncSplitPeopleInput();
     });
+    if (els.paymentSplitPeopleMinus) els.paymentSplitPeopleMinus.addEventListener("click", () => {
+      changeSplitPeople(-1);
+    });
+    if (els.paymentSplitPeoplePlus) els.paymentSplitPeoplePlus.addEventListener("click", () => {
+      changeSplitPeople(1);
+    });
     if (els.paymentSplitList) els.paymentSplitList.addEventListener("input", (e) => {
       const input = e.target.closest("[data-field]");
       if (!input) return;
-      const row = input.closest(".paymentSplitRow");
+      const row = input.closest(".paymentSplitCard");
       if (!row) return;
       const id = String(row.dataset.splitId || "");
       const split = paymentSplits.find((item) => item.id === id);
@@ -2964,24 +3443,41 @@
       if (field === "person_name") split.person_name = input.value;
       if (field === "amount") split.amount = input.value;
       if (field === "method") split.method = input.value;
+      if (field === "cash_received") split.cash_received = input.value;
       updatePaymentSplitHint(calcTotals().total);
+      if (field === "amount" || field === "cash_received") refreshPaymentSplitCardUi(row, split);
     });
     if (els.paymentSplitList) els.paymentSplitList.addEventListener("change", (e) => {
-      const select = e.target.closest("select[data-field='method']");
-      if (!select) return;
-      const row = select.closest(".paymentSplitRow");
+      const fieldEl = e.target.closest("[data-field]");
+      if (!fieldEl) return;
+      const row = fieldEl.closest(".paymentSplitCard");
       if (!row) return;
       const id = String(row.dataset.splitId || "");
       const split = paymentSplits.find((item) => item.id === id);
       if (!split) return;
-      split.method = select.value;
-      updatePaymentSplitHint(calcTotals().total);
+      const field = String(fieldEl.dataset.field || "");
+      if (field === "method"){
+        split.method = fieldEl.value;
+        if (split.method !== "dinheiro"){
+          split.cash_received = "";
+        }
+      }
+      if (field === "amount"){
+        const parsed = parsePaymentAmountInput(fieldEl.value);
+        if (Number.isFinite(parsed)) split.amount = formatPaymentAmountInput(parsed);
+      }
+      if (field === "cash_received"){
+        const parsedReceived = parsePaymentAmountInput(fieldEl.value);
+        split.cash_received = Number.isFinite(parsedReceived) ? formatPaymentAmountInput(parsedReceived) : fieldEl.value;
+      }
+      renderPaymentSplits(calcTotals().total);
     });
     window.addEventListener("resize", updatePaymentVisibility);
 
     // Salvar e imprimir
     els.checkoutConfirm.addEventListener("click", async () => {
       if (cart.size === 0){ toast("Carrinho vazio 😅", "info"); return; }
+      if (!(await ensureCashOpenForCheckout("salvar o pedido"))) return;
       if (!validateCheckout()) return;
 
       try{
@@ -3061,7 +3557,7 @@
 
           closeCheckout();
           setLastOrderId(lastId);
-          openPrintUrl(`/api/orders/${lastId}/print?prices=1`);
+          await openPrintUrlSmart(`/api/orders/${lastId}/print?prices=1`, { auto: true });
 
           closingTableId = null;
           closingTableIds = null;
@@ -3084,7 +3580,7 @@
 
           closeCheckout();
           setLastOrderId(data.order_id);
-          openPrintUrl(`/api/orders/${data.order_id}/print?prices=1`);
+          await openPrintUrlSmart(`/api/orders/${data.order_id}/print?prices=1`, { auto: true });
  
            cart.clear();
            renderCart();

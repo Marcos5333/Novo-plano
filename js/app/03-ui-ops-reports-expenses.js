@@ -42,12 +42,19 @@
       companyLogoFileInput: document.getElementById("companyLogoFileInput"),
       autoBackupToggle: document.getElementById("autoBackupToggle"),
       themeLoginBgToggle: document.getElementById("themeLoginBgToggle"),
+      printerModeSelect: document.getElementById("printerModeSelect"),
+      printerNameInput: document.getElementById("printerNameInput"),
+      printerAutoToggle: document.getElementById("printerAutoToggle"),
+      printerSaveBtn: document.getElementById("printerSaveBtn"),
+      printerTestBtn: document.getElementById("printerTestBtn"),
+      printerStatus: document.getElementById("printerStatus"),
       diagInfo: document.getElementById("diagInfo"),
       diagRefreshBtn: document.getElementById("diagRefreshBtn"),
       logClearBtn: document.getElementById("logClearBtn"),
       logList: document.getElementById("logList"),
       cancelSaleBtn: document.getElementById("cancelSaleBtn"),
       addonCategorySelect: document.getElementById("addonCategorySelect"),
+      addonCategoryDeleteBtn: document.getElementById("addonCategoryDeleteBtn"),
       addonNameInput: document.getElementById("addonNameInput"),
       addonPriceInput: document.getElementById("addonPriceInput"),
       addonAddBtn: document.getElementById("addonAddBtn"),
@@ -200,6 +207,7 @@
       halfSeg: document.getElementById("halfSeg"),
       flavor1: document.getElementById("flavor1"),
       flavor2: document.getElementById("flavor2"),
+      pizzaFlavor2Field: document.getElementById("pizzaFlavor2Field"),
       pizzaAddon: document.getElementById("pizzaAddon"),
       pizzaAddonHint: document.getElementById("pizzaAddonHint"),
       pizzaNotes: document.getElementById("pizzaNotes"),
@@ -223,6 +231,8 @@
       paymentMethod: document.getElementById("paymentMethod"),
       paymentSplitToggle: document.getElementById("paymentSplitToggle"),
       paymentSplitPeople: document.getElementById("paymentSplitPeople"),
+      paymentSplitPeopleMinus: document.getElementById("paymentSplitPeopleMinus"),
+      paymentSplitPeoplePlus: document.getElementById("paymentSplitPeoplePlus"),
       paymentMethodSingleWrap: document.getElementById("paymentMethodSingleWrap"),
       paymentSplitWrap: document.getElementById("paymentSplitWrap"),
       paymentSplitList: document.getElementById("paymentSplitList"),
@@ -257,6 +267,8 @@
       receivableList: document.getElementById("receivableList"),
       opsTables: document.getElementById("opsTables"),
       opsKitchen: document.getElementById("opsKitchen"),
+      opsKitchenHistory: document.getElementById("opsKitchenHistory"),
+      deliveryHistoryList: document.getElementById("deliveryHistoryList"),
 
       // Category modal
       categoryModal: document.getElementById("categoryModal"),
@@ -469,22 +481,56 @@
       }).join("");
     }
 
+    function renderOpsKitchenHistory(rows){
+      if (!els.opsKitchenHistory) return;
+      if (!rows || rows.length === 0){
+        els.opsKitchenHistory.innerHTML = `<div class="opsEmpty">Nenhum item pronto hoje</div>`;
+        return;
+      }
+
+      els.opsKitchenHistory.innerHTML = rows.map(r => {
+        const qty = Number(r.qty || 0);
+        const itemName = String(r.name || "Item");
+        const origin = (String(r.order_type) === "mesa" && r.table_no)
+          ? `Mesa ${r.table_no}`
+          : prettyType(r.order_type);
+        const notes = (r.notes || "").trim();
+        const readyAt = r.ready_at ? fmtDateTime(r.ready_at) : fmtDateTime(r.created_at);
+        const meta = `Pedido #${r.order_number} • ${origin} • Pronto em ${readyAt}`;
+        return `
+          <article class="opsItem kitchenCard">
+            <div class="kitchenHead">
+              <span class="kitchenStatus is-ready">Pronto</span>
+              <span class="kitchenQty">${escapeHtml(`${qty}x`)}</span>
+            </div>
+            <div class="opsTitle">${escapeHtml(itemName)}</div>
+            <div class="opsMeta">${escapeHtml(meta)}</div>
+            ${notes ? `<div class="opsMeta">Obs: ${escapeHtml(notes)}</div>` : ""}
+          </article>
+        `;
+      }).join("");
+    }
+
     async function loadOpsData(){
       if (!els.opsTables || !els.opsKitchen) return;
 
       const refreshBtns = [els.opsTablesRefresh, els.opsKitchenRefresh].filter(Boolean);
       try{
         refreshBtns.forEach(b => setButtonLoading(b, true));
+        const today = todayISODate();
         const [tResp, kResp] = await Promise.all([
           fetch("/api/tables/open"),
           fetch("/api/kitchen/pending"),
         ]);
+        const historyResp = await fetch(`/api/kitchen/history?date=${encodeURIComponent(today)}`);
 
         const tData = await tResp.json().catch(() => null);
         const kData = await kResp.json().catch(() => null);
+        const historyData = await historyResp.json().catch(() => null);
 
         if (!tResp.ok || tData?.ok === false) throw new Error(tData?.error || "Erro ao carregar mesas");
         if (!kResp.ok || kData?.ok === false) throw new Error(kData?.error || "Erro ao carregar cozinha");
+        if (!historyResp.ok || historyData?.ok === false) throw new Error(historyData?.error || "Erro ao carregar histórico da cozinha");
 
         let rows = tData?.rows || [];
         const needItems = rows.filter(r => !Array.isArray(r.itemsSummary));
@@ -512,9 +558,11 @@
         }
         renderOpsTables(rows);
         renderOpsKitchen(kData?.rows || []);
+        renderOpsKitchenHistory(historyData?.rows || []);
       } catch (e){
         els.opsTables.innerHTML = `<div class="opsEmpty">Falha ao carregar mesas</div>`;
         els.opsKitchen.innerHTML = `<div class="opsEmpty">Falha ao carregar cozinha</div>`;
+        if (els.opsKitchenHistory) els.opsKitchenHistory.innerHTML = `<div class="opsEmpty">Falha ao carregar histórico</div>`;
         logError("Falha ao carregar OPS", e);
       } finally {
         refreshBtns.forEach(b => setButtonLoading(b, false));
@@ -955,16 +1003,51 @@
       }).join("");
     }
 
+    function renderDeliveryHistory(rows){
+      if (!els.deliveryHistoryList) return;
+      if (!rows || rows.length === 0){
+        els.deliveryHistoryList.innerHTML = `<div class="opsEmpty">Nenhuma entrega finalizada hoje</div>`;
+        return;
+      }
+
+      els.deliveryHistoryList.innerHTML = rows.map(r => {
+        const total = brl(Number(r.total || 0));
+        const customer = r.customer_name ? `Cliente: ${escapeHtml(r.customer_name)}` : "Cliente: -";
+        const address = r.address ? `Endereço: ${escapeHtml(r.address)}` : "Endereço: -";
+        const finishedAt = r.delivery_finalized_at ? fmtDateTime(r.delivery_finalized_at) : fmtDateTime(r.created_at);
+        const meta = `Pedido #${r.order_number} • Finalizado em ${finishedAt}`;
+        return `
+          <article class="opsItem deliveryCard">
+            <div class="deliveryHead">
+              <span class="deliveryStatus is-finalized">Finalizado</span>
+              <span class="deliveryTotal">${escapeHtml(total)}</span>
+            </div>
+            <div class="opsMeta">${escapeHtml(meta)}</div>
+            <div class="opsMeta">${customer}</div>
+            <div class="opsMeta">${address}</div>
+          </article>
+        `;
+      }).join("");
+    }
+
     async function loadDeliveryData(){
       if (!els.deliveryList) return;
       try{
         setButtonLoading(els.deliveryRefresh, true);
-        const resp = await fetch("/api/delivery/pending");
+        const today = todayISODate();
+        const [resp, historyResp] = await Promise.all([
+          fetch("/api/delivery/pending"),
+          fetch(`/api/delivery/history?date=${encodeURIComponent(today)}`),
+        ]);
         const data = await resp.json().catch(() => null);
+        const historyData = await historyResp.json().catch(() => null);
         if (!resp.ok || data?.ok === false) throw new Error(data?.error || "Erro ao carregar deliveries");
+        if (!historyResp.ok || historyData?.ok === false) throw new Error(historyData?.error || "Erro ao carregar histórico do delivery");
         renderDelivery(data?.rows || []);
+        renderDeliveryHistory(historyData?.rows || []);
       } catch (e){
         els.deliveryList.innerHTML = `<div class="opsEmpty">Falha ao carregar deliveries</div>`;
+        if (els.deliveryHistoryList) els.deliveryHistoryList.innerHTML = `<div class="opsEmpty">Falha ao carregar histórico</div>`;
         logError("Falha ao carregar Delivery", e);
       } finally {
         setButtonLoading(els.deliveryRefresh, false);

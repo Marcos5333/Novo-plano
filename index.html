@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>MFAS PDV </title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=20260320b" />
   <script>
     (function(){
       try{
@@ -67,7 +67,7 @@
             <button class="btnGhost" type="button" id="accessSignupBtn">Criar conta</button>
           </div>
 
-          <div class="hint" id="accessLoginHint">Ao criar conta, seus dados ficam salvos no Supabase.</div>
+          <div class="hint" id="accessLoginHint">Ao criar conta você concorda com os termos de uso.</div>
         </div>
       </section>
     </div>
@@ -322,7 +322,7 @@
             <label>Sabor 1</label>
             <select id="flavor1"></select>
           </div>
-          <div class="field">
+          <div class="field" id="pizzaFlavor2Field" style="display:none">
             <label>Sabor 2 (se meio a meio)</label>
             <select id="flavor2"></select>
           </div>
@@ -409,8 +409,11 @@
                 <span>Dividir pagamento (pessoas/formas)</span>
               </div>
               <div class="paymentSplitPeopleInline">
-                <label for="paymentSplitPeople">Pessoas</label>
-                <input id="paymentSplitPeople" type="number" min="2" max="20" step="1" value="2" inputmode="numeric" />
+                <div class="paymentSplitStepper">
+                  <button class="stepBtn" type="button" id="paymentSplitPeopleMinus" aria-label="Diminuir pessoas">-</button>
+                  <input id="paymentSplitPeople" type="number" min="2" max="20" step="1" value="2" inputmode="numeric" aria-label="Quantidade de pessoas" />
+                  <button class="stepBtn" type="button" id="paymentSplitPeoplePlus" aria-label="Aumentar pessoas">+</button>
+                </div>
               </div>
             </div>
 
@@ -501,6 +504,11 @@
           <div class="opsTitle">Em preparo</div>
           <div id="opsKitchen"></div>
         </div>
+        <div class="opsCard">
+          <div class="opsTitle">Histórico diário • prontos</div>
+          <div class="hint">Pedidos prontos de hoje, das 00:00 às 23:59.</div>
+          <div id="opsKitchenHistory"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -521,6 +529,11 @@
           <div class="opsTitle">Em preparo</div>
           <div id="deliveryList"></div>
         </div>
+        <div class="opsCard">
+          <div class="opsTitle">Histórico diário • finalizados</div>
+          <div class="hint">Entregas finalizadas hoje, das 00:00 às 23:59.</div>
+          <div id="deliveryHistoryList"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -535,7 +548,7 @@
 
       <div class="modalBody">
         <div class="field">
-          <label>Calendário (data base)</label>
+          <label>Calendário</label>
           <input id="reportDate" type="date" />
           <div class="hint">Use a data para gerar o relatório diário, mensal ou anual.</div>
         </div>
@@ -580,8 +593,8 @@
               <div class="reportMeta">Reabre o relatório do último caixa fechado.</div>
             </div>
             <div class="reportActions">
-              <button class="btn reportBtn reportBtnThin" type="button" data-report="last" data-mode="normal">Abrir normal</button>
-              <button class="btn reportBtn reportBtnThin" type="button" data-report="last" data-mode="detailed">Abrir detalhado</button>
+              <button class="btn reportBtn reportBtnThin" type="button" data-report="last" data-mode="normal">Gerar normal</button>
+              <button class="btn reportBtn reportBtnThin" type="button" data-report="last" data-mode="detailed">Gerar detalhado</button>
             </div>
           </div>
 
@@ -625,42 +638,64 @@
 
       <div class="modalBody">
         <div class="opsCard cashSummaryCard">
-          <div style="display:flex; gap:8px; align-items:center; justify-content:space-between;">
-            <div class="opsTitle">Resumo</div>
+          <div class="cashSummaryHead">
+            <div>
+              <div class="opsTitle">Resumo do caixa</div>
+              <div class="opsMeta">Visão rápida das entradas, saídas e saldo esperado.</div>
+            </div>
             <button class="btnGhost" type="button" id="expensesRefresh">Atualizar</button>
           </div>
           <div id="expensesSummary" class="expensesSummary"></div>
         </div>
 
-        <div class="cashControlsGrid">
-          <div class="sysCard cashStatusCard">
-            <div class="sysTitle">Status</div>
-            <div id="cashModalStatus" class="diagBox">Carregando...</div>
-            <button class="btnGhost" type="button" id="cashResetBtn" data-role-only="manager">Resetar Tudo</button>
-            <button class="btnGhost" type="button" id="cancelSaleBtn" data-role-only="manager">Cancelar venda</button>
-          </div>
-
-          <div class="sysCard" id="cashOpenCard">
-            <div class="sysTitle">Abrir caixa</div>
-            <div class="field">
-              <label>Valor de abertura (R$)</label>
-              <input id="cashOpenAmount" placeholder="Ex: 150,00" inputmode="decimal" />
+        <div class="cashWorkspace">
+          <div class="cashSidebar">
+            <div class="sysCard cashStatusCard">
+              <div class="cashCardHead">
+                <div class="sysTitle">Status atual</div>
+                <div class="hint">Situação do caixa neste momento.</div>
+              </div>
+              <div id="cashModalStatus" class="diagBox">Carregando...</div>
+              <div class="cashQuickActions">
+                <button class="btnGhost" type="button" id="cashResetBtn" data-role-only="manager">Resetar Tudo</button>
+                <button class="btnGhost" type="button" id="cancelSaleBtn" data-role-only="manager">Cancelar venda</button>
+              </div>
             </div>
-            <button class="btn" type="button" id="cashOpenBtn" data-role-only="manager">
-              <span class="icon">🔓</span>Abrir Caixa
-            </button>
+
+            <div class="cashActionStack">
+              <div class="sysCard" id="cashOpenCard">
+                <div class="cashCardHead">
+                  <div class="sysTitle">Abrir caixa</div>
+                  <div class="hint">Informe o valor inicial para iniciar o turno.</div>
+                </div>
+                <div class="field">
+                  <label>Valor de abertura (R$)</label>
+                  <input id="cashOpenAmount" placeholder="Ex: 150,00" inputmode="decimal" />
+                </div>
+                <button class="btn cashActionBtnSlim" type="button" id="cashOpenBtn" data-role-only="manager">
+                  <span class="icon">🔓</span>Abrir Caixa
+                </button>
+              </div>
+
+              <div class="sysCard" id="cashCloseCard">
+                <div class="cashCardHead">
+                  <div class="sysTitle">Fechar caixa</div>
+                  <div class="hint">Gera o fechamento com vendas, despesas e saldo esperado.</div>
+                </div>
+                <button class="btnGhost" type="button" id="cashCloseBtn" data-role-only="manager">Fechar Caixa</button>
+              </div>
+            </div>
           </div>
 
-          <div class="sysCard" id="cashCloseCard">
-            <div class="sysTitle">Fechar caixa</div>
-            <div class="hint">Ao fechar, o sistema gera o relatório com vendas, despesas e saldo esperado.</div>
-            <button class="btnGhost" type="button" id="cashCloseBtn" data-role-only="manager">Fechar Caixa</button>
+          <div class="opsCard cashLaunchCard">
+            <div class="cashLaunchHead">
+              <div>
+                <div class="opsTitle">Lançamentos do período</div>
+                <div class="opsMeta">Vendas e movimentações registradas no caixa.</div>
+              </div>
+            </div>
+            <div id="expensesList"></div>
           </div>
-        </div>
-
-        <div class="opsCard cashLaunchCard">
-          <div class="opsTitle">Lançamentos</div>
-          <div id="expensesList"></div>
         </div>
       </div>
     </div>
@@ -784,6 +819,37 @@
              <div class="logList" id="logList"></div>
            </div>
 
+           <div class="sysCard">
+             <div class="sysTitle">Impressão</div>
+             <div class="field">
+               <label for="printerModeSelect">Modo de impressão</label>
+               <select id="printerModeSelect" data-role-only="manager">
+                 <option value="preview">Pré-visualização manual</option>
+                 <option value="auto_browser">Automática (impressora padrão do Windows)</option>
+               </select>
+             </div>
+             <div class="field">
+               <label for="printerNameInput">Impressora / modelo</label>
+               <input id="printerNameInput" data-role-only="manager" list="printerModelList" placeholder="Ex: Epson TM-T20X" />
+               <datalist id="printerModelList">
+                 <option value="Epson TM-T20"></option>
+                 <option value="Epson TM-T20X"></option>
+                 <option value="Epson TM-T82X"></option>
+                 <option value="Epson TM-m30"></option>
+               </datalist>
+             </div>
+             <div class="switchRow">
+               <input type="checkbox" id="printerAutoToggle" data-role-only="manager" />
+               <span>Imprimir pedido finalizado automaticamente</span>
+             </div>
+             <div class="formGrid">
+               <button class="btn" type="button" id="printerSaveBtn" data-role-only="manager">Salvar impressão</button>
+               <button class="btnGhost" type="button" id="printerTestBtn">Testar impressão</button>
+             </div>
+             <div class="diagBox" id="printerStatus">Pré-visualização manual ativa.</div>
+             <div class="hint">No navegador, a escolha real da impressora depende do Windows/Chrome. Para imprimir sem abrir a janela, use a Epson como padrão do PC e ative o modo `kiosk-printing` no navegador.</div>
+           </div>
+
            <div class="sysCard compact">
              <div class="sysTitle">Acesso</div>
              <div class="diagBox" id="accessUserInfo">Não autenticado.</div>
@@ -811,7 +877,7 @@
             <div class="sysMini">
               <div><span>Modo</span><b id="miniRole">-</b></div>
               <div><span>Caixa</span><b id="miniCash">-</b></div>
-              <div><span>Storage</span><b id="miniStorage">-</b></div>
+              <div><span>Base</span><b id="miniStorage">-</b></div>
               <div><span>Status</span><b id="miniOnline">-</b></div>
             </div>
             <div class="hint">Dica: use o mouse no topo para abrir Mesas, Cozinha e Delivery rapidamente.</div>
@@ -836,7 +902,10 @@
         <div class="sysCard">
           <div class="field">
             <label>Categoria</label>
-            <select id="addonCategorySelect"></select>
+            <div class="addonCategoryRow">
+              <select id="addonCategorySelect"></select>
+              <button class="btnGhost addonCategoryDeleteBtn" type="button" id="addonCategoryDeleteBtn" data-role-only="manager">Excluir categoria</button>
+            </div>
           </div>
           <div class="field">
             <label>Novo acompanhamento</label>
@@ -1165,16 +1234,16 @@
   />
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-  <script src="js/core/supabase-config.js" defer></script>
-  <script src="js/core/supabase-client.js" defer></script>
-  <script src="js/core/helpers.js" defer></script>
-  <script src="js/app/00-access-login.js" defer></script>
-  <script src="js/app/01-bootstrap-demo.js" defer></script>
-  <script src="js/app/02-logs-state-products.js" defer></script>
-  <script src="js/app/03-ui-ops-reports-expenses.js" defer></script>
-  <script src="js/app/04-system-products-cart-checkout.js" defer></script>
-  <script src="js/app/05-import-init.js" defer></script>
-  <script src="js/app/06-cloud-backup.js" defer></script>
+  <script src="js/core/supabase-config.js?v=20260320b" defer></script>
+  <script src="js/core/supabase-client.js?v=20260320b" defer></script>
+  <script src="js/core/helpers.js?v=20260320b" defer></script>
+  <script src="js/app/00-access-login.js?v=20260320b" defer></script>
+  <script src="js/app/01-bootstrap-demo.js?v=20260320b" defer></script>
+  <script src="js/app/02-logs-state-products.js?v=20260320b" defer></script>
+  <script src="js/app/03-ui-ops-reports-expenses.js?v=20260320b" defer></script>
+  <script src="js/app/04-system-products-cart-checkout.js?v=20260320b" defer></script>
+  <script src="js/app/05-import-init.js?v=20260320b" defer></script>
+  <script src="js/app/06-cloud-backup.js?v=20260320b" defer></script>
 
 </body>
 </html>

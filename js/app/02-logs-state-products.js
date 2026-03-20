@@ -101,10 +101,10 @@
     let shiftState = (() => {
       try{
         const raw = localStorage.getItem(LS_SHIFT);
-        if (!raw) return { open: true };
+        if (!raw) return { open: false };
         const parsed = JSON.parse(raw);
         return { open: !!parsed.open };
-      }catch{ return { open:true }; }
+      }catch{ return { open:false }; }
     })();
     let lastOrderId = (() => {
       try{
@@ -202,12 +202,12 @@
         if (DEMO_STORAGE_MODE) {
           const raw = localStorage.getItem("mvs_demo_backend_v1") || "";
           const size = (typeof Blob !== "undefined") ? new Blob([raw]).size : raw.length;
-          miniStorage.textContent = `Local (${formatMiniBytes(size)})`;
+          miniStorage.textContent = `Base local (${formatMiniBytes(size)})`;
         } else {
-          miniStorage.textContent = "Servidor";
+          miniStorage.textContent = "Base online";
         }
       } catch {
-        miniStorage.textContent = DEMO_STORAGE_MODE ? "Local" : "Servidor";
+        miniStorage.textContent = DEMO_STORAGE_MODE ? "Base local" : "Base online";
       }
 
       miniOnline.textContent = navigator.onLine ? "Online" : "Offline";
@@ -450,6 +450,7 @@ function syncSubcatSelect(){
     function removeCategoryAndProducts(categoryId){
       const id = String(categoryId || "").trim();
       if (!id) return { removedProducts: 0 };
+      const removedCategory = categories.find((c) => String(c.id || "") === id) || null;
 
       const removedProductIds = products
         .filter((p) => String(p.category || "") === id)
@@ -475,8 +476,21 @@ function syncSubcatSelect(){
       categories = categories.filter((c) => String(c.id || "") !== id);
       saveCategories(categories);
 
-      if (categoryAddons && Object.prototype.hasOwnProperty.call(categoryAddons, id)){
-        delete categoryAddons[id];
+      const addonKeysToDelete = new Set(addonCategoryVariants(id));
+      const normalizedLabelId = normalizeCategoryId(removedCategory?.label || "");
+      for (const variant of addonCategoryVariants(normalizedLabelId)){
+        addonKeysToDelete.add(variant);
+      }
+
+      let addonsChanged = false;
+      for (const key of addonKeysToDelete){
+        if (!key) continue;
+        if (categoryAddons && Object.prototype.hasOwnProperty.call(categoryAddons, key)){
+          delete categoryAddons[key];
+          addonsChanged = true;
+        }
+      }
+      if (addonsChanged){
         saveCategoryAddons(categoryAddons);
       }
 
@@ -502,6 +516,7 @@ function syncSubcatSelect(){
           <div class="catPreview">${escapeHtml(c.emoji || "🏷️")}</div>
           <input type="text" data-field="label" value="${escapeAttr(c.label)}" placeholder="Nome da categoria" />
           <input type="text" data-field="emoji" value="${escapeAttr(c.emoji || "")}" placeholder="Emoji" />
+          <button class="miniBtn catEmojiChooseBtn" type="button" data-action="emoji">Escolher ▾</button>
           <button class="miniBtn danger" type="button" data-action="del" data-id="${escapeAttr(c.id)}">Excluir</button>
         </div>
       `).join("");
