@@ -250,15 +250,17 @@
       border: 1px solid rgba(255,255,255,.35);
     }
     .slimBtn{
-      padding:8px 12px;
-      font-size:12px;
+      padding:6px 10px;
+      font-size:11px;
       border-radius:8px;
+      gap:8px;
+      letter-spacing:.15px;
     }
     .slimBtn .icon{
-      width:26px;
-      height:26px;
-      border-radius:10px;
-      font-size:12px;
+      width:22px;
+      height:22px;
+      border-radius:9px;
+      font-size:11px;
     }
 
     /* Layout */
@@ -968,16 +970,19 @@
       font-weight:1000;
     }
     .sysGrid{
-      display:grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap:14px;
-      align-items:start;
+      display:block;
+      column-count:2;
+      column-gap:14px;
     }
-    #systemModal .sysGrid > .sysCard:last-child{
-      grid-column: 1 / -1;
+    .sysGrid > .sysCard{
+      break-inside: avoid;
+      margin:0 0 14px 0;
+    }
+    .sysGrid > .sysCard:last-child{
+      margin-bottom:0;
     }
     @media (max-width: 860px){
-      .sysGrid{grid-template-columns:1fr}
+      .sysGrid{column-count:1}
       .sysBrandIntroText{
         font-size:15px;
       }
@@ -1182,8 +1187,30 @@
     #systemModal .btnGhost{
       font-weight:700;
     }
-    #backupRestoreBtn{
-      margin-top:6px;
+    #systemModal .sysBtnGrid{
+      display:grid;
+      gap:8px;
+    }
+    #systemModal .sysBtnGrid2,
+    #systemModal .sysBtnGrid2x2{
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    #systemModal .sysBtnGrid .btn,
+    #systemModal .sysBtnGrid .btnGhost{
+      min-height:38px;
+      padding:8px 10px;
+      border-radius:12px;
+      font-size:12px;
+      font-weight:1000;
+      letter-spacing:.2px;
+      gap:8px;
+      box-shadow:none;
+    }
+    #systemModal .sysBtnGrid .btn .icon{
+      width:26px;
+      height:26px;
+      border-radius:10px;
+      box-shadow:none;
     }
     .catEditor{
       display:grid;
@@ -2207,9 +2234,9 @@
     }
     .cashControlsGrid{
       display:grid;
-      grid-template-columns: 1.3fr 1fr 1fr;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap:10px;
-      align-items:start;
+      align-items:stretch;
     }
     .cashSummaryCard{
       border:1px solid rgba(37,99,235,.18);

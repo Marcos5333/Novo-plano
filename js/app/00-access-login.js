@@ -1,11 +1,8 @@
 (() => {
-  const ACCESS_PIN_KEY = "mvs_access_pin_v1";
   const ACCESS_SESSION_KEY = "mvs_access_session_v1";
   const ROLE_KEY = "mvs_role_v1";
   const COMPANY_NAME_KEY = "mvs_company_name_v1";
   const COMPANY_LOGO_KEY = "mvs_company_logo_v1";
-  const DEFAULT_ACCESS_PIN = "0000";
-  const MIN_PIN_LEN = 4;
 
   const ui = {
     modal: document.getElementById("accessLoginModal"),
@@ -13,13 +10,13 @@
     logo: document.getElementById("accessLogoPreview"),
     companyName: document.getElementById("accessCompanyName"),
     msg: document.getElementById("accessLoginMsg"),
-    pinInput: document.getElementById("accessPinInput"),
+    emailInput: document.getElementById("accessEmailInput"),
+    passwordInput: document.getElementById("accessPasswordInput"),
     loginBtn: document.getElementById("accessLoginBtn"),
-    clearBtn: document.getElementById("accessPinClearBtn"),
+    signupBtn: document.getElementById("accessSignupBtn"),
     hint: document.getElementById("accessLoginHint"),
     lockBtn: document.getElementById("lockScreenBtn"),
-    newPinInput: document.getElementById("accessNewPinInput"),
-    setPinBtn: document.getElementById("accessSetPinBtn"),
+    userInfo: document.getElementById("accessUserInfo"),
   };
 
   function notify(message, type = "info"){
@@ -54,28 +51,8 @@
     safeRemove(localStorage, ACCESS_SESSION_KEY);
   }
 
-  function normalizePin(value){
-    return String(value || "").trim();
-  }
-
-  function getAccessPin(){
-    try{
-      const raw = normalizePin(localStorage.getItem(ACCESS_PIN_KEY) || "");
-      if (raw) return raw;
-      localStorage.setItem(ACCESS_PIN_KEY, DEFAULT_ACCESS_PIN);
-      return DEFAULT_ACCESS_PIN;
-    } catch {
-      return DEFAULT_ACCESS_PIN;
-    }
-  }
-
-  function setAccessPin(pin){
-    try{
-      localStorage.setItem(ACCESS_PIN_KEY, normalizePin(pin));
-      return true;
-    } catch {
-      return false;
-    }
+  function normalizeText(value){
+    return String(value ?? "").trim();
   }
 
   function isLocked(){
@@ -101,28 +78,30 @@
     ui.msg.classList.toggle("error", !!isError);
   }
 
-  function focusPin(){
-    if (!ui.pinInput) return;
+  function focusPrimary(){
+    const el = ui.emailInput || ui.passwordInput;
+    if (!el) return;
     setTimeout(() => {
-      ui.pinInput.focus();
-      ui.pinInput.select?.();
+      el.focus();
+      el.select?.();
     }, 0);
   }
 
-  function focusPinNow(){
-    if (!ui.pinInput) return;
-    ui.pinInput.focus();
-    ui.pinInput.select?.();
+  function focusPrimaryNow(){
+    const el = ui.emailInput || ui.passwordInput;
+    if (!el) return;
+    el.focus();
+    el.select?.();
   }
 
   function updateBrand(){
     try{
-      const storedName = normalizePin(localStorage.getItem(COMPANY_NAME_KEY) || "");
+      const storedName = normalizeText(localStorage.getItem(COMPANY_NAME_KEY) || "");
       if (storedName && ui.companyName) ui.companyName.textContent = storedName.slice(0, 60);
     } catch {}
 
     try{
-      const storedLogo = normalizePin(localStorage.getItem(COMPANY_LOGO_KEY) || "");
+      const storedLogo = normalizeText(localStorage.getItem(COMPANY_LOGO_KEY) || "");
       if (storedLogo && ui.logo) ui.logo.src = storedLogo;
     } catch {}
 
@@ -135,10 +114,16 @@
 
   function updateHint(){
     if (!ui.hint) return;
-    const isDefaultPin = getAccessPin() === DEFAULT_ACCESS_PIN;
-    ui.hint.textContent = isDefaultPin
-      ? "Primeiro acesso: PIN padrão 0000 (altere em Sistema → Acesso)."
-      : "PIN configurado. Para trocar: Sistema → Acesso (gerente).";
+    const sb = window.MVS_SUPABASE;
+    ui.hint.textContent = sb?.isConfigured
+      ? "Ao criar conta, seus dados ficam salvos no Supabase."
+      : "Configure o Supabase em js/core/supabase-config.js.";
+  }
+
+  function setUserInfo(user){
+    if (!ui.userInfo) return;
+    const email = normalizeText(user?.email || "");
+    ui.userInfo.textContent = email ? `Conectado como: ${email}` : "Não autenticado.";
   }
 
   function forceOperatorRole(){
@@ -148,112 +133,262 @@
     }
   }
 
-  function lockScreen(opts = {}){
-    clearSessionFlag();
-    setLocked(true);
-    updateBrand();
-    updateHint();
-    if (ui.pinInput) ui.pinInput.value = "";
-    setMsg(String(opts.message || "Informe seu PIN de acesso."), false);
-
-    forceOperatorRole();
-
+  function closeOverlays(){
     if (typeof closeAnyModal === "function") {
       try{ closeAnyModal(); } catch {}
     }
     if (typeof closeSystemModal === "function") {
       try{ closeSystemModal(); } catch {}
-    } else if (ui.lockBtn) {
-      // fallback: fecha o modal do sistema se conseguir achar
+    } else {
       try{ document.getElementById("systemModal")?.style && (document.getElementById("systemModal").style.display = "none"); } catch {}
     }
+  }
 
-    focusPin();
+  function lockScreen(opts = {}){
+    clearSessionFlag();
+    setLocked(true);
+    updateBrand();
+    updateHint();
+    setUserInfo(null);
+    if (ui.emailInput) ui.emailInput.value = "";
+    if (ui.passwordInput) ui.passwordInput.value = "";
+    setMsg(String(opts.message || "Faça login para continuar."), !!opts.isError);
+
+    forceOperatorRole();
+    closeOverlays();
+
+    focusPrimary();
     if (!opts.silent) notify("Tela bloqueada 🔒", "info");
   }
 
-  function unlockScreen(){
+  function unlockScreen(user){
     setSessionFlag();
     setLocked(false);
-    if (ui.pinInput) ui.pinInput.value = "";
-    setMsg("Informe seu PIN de acesso.", false);
+    setUserInfo(user);
+    if (ui.emailInput) ui.emailInput.value = "";
+    if (ui.passwordInput) ui.passwordInput.value = "";
+    setMsg("Informe seu e-mail e senha.", false);
   }
 
-  function tryLogin(){
-    const pin = normalizePin(ui.pinInput?.value || "");
-
-    if (pin.length < MIN_PIN_LEN){
-      setMsg(`PIN inválido (mín. ${MIN_PIN_LEN}).`, true);
-      focusPin();
+  function setButtonLoading(btn, loading, label){
+    if (!btn) return;
+    if (loading){
+      if (!btn.dataset.label) btn.dataset.label = btn.textContent;
+      if (label) btn.textContent = label;
+      btn.classList.add("loading");
+      btn.disabled = true;
       return;
     }
-
-    if (pin !== getAccessPin()){
-      setMsg("PIN incorreto. Tente novamente.", true);
-      if (ui.pinInput) ui.pinInput.value = "";
-      focusPin();
-      return;
-    }
-
-    unlockScreen();
-    notify("Acesso liberado ✅", "success");
+    const original = btn.dataset.label;
+    if (original) btn.textContent = original;
+    btn.classList.remove("loading");
+    btn.disabled = false;
   }
 
-  function trySetNewPin(){
-    if (typeof requireManager === "function" && !requireManager()) return;
+  function getSupabaseClient(){
+    return window.MVS_SUPABASE?.client || null;
+  }
 
-    const newPin = normalizePin(ui.newPinInput?.value || "");
-    if (newPin.length < MIN_PIN_LEN){
-      notify(`PIN inválido (mín. ${MIN_PIN_LEN}).`, "error");
-      ui.newPinInput?.focus();
-      ui.newPinInput?.select?.();
+  async function tryLogin(){
+    const client = getSupabaseClient();
+    if (!client){
+      lockScreen({ silent: true, isError: true, message: "Supabase não configurado. Preencha js/core/supabase-config.js." });
       return;
     }
 
-    if (!setAccessPin(newPin)){
-      notify("Falha ao salvar PIN (storage indisponível).", "error");
+    const email = normalizeText(ui.emailInput?.value || "");
+    const password = String(ui.passwordInput?.value || "");
+
+    if (!email || !email.includes("@")){
+      setMsg("Email inválido.", true);
+      ui.emailInput?.focus();
+      ui.emailInput?.select?.();
+      return;
+    }
+    if (!password || password.length < 6){
+      setMsg("Senha inválida (mín. 6).", true);
+      ui.passwordInput?.focus();
+      ui.passwordInput?.select?.();
       return;
     }
 
-    if (ui.newPinInput) ui.newPinInput.value = "";
-    updateHint();
-    notify("PIN de acesso atualizado ✅", "success");
+    setButtonLoading(ui.loginBtn, true, "Entrando...");
+    setButtonLoading(ui.signupBtn, true);
+    setMsg("Entrando...", false);
+
+    try{
+      const { data, error } = await client.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      unlockScreen(data?.user || data?.session?.user || null);
+      notify("Acesso liberado ✅", "success");
+    } catch (e){
+      setMsg("Falha no login: " + (e?.message || "erro"), true);
+      if (ui.passwordInput) ui.passwordInput.value = "";
+      ui.passwordInput?.focus();
+      ui.passwordInput?.select?.();
+    } finally {
+      setButtonLoading(ui.loginBtn, false);
+      setButtonLoading(ui.signupBtn, false);
+    }
+  }
+
+  async function upsertProfile(client, user){
+    if (!client || !user?.id) return;
+    try{
+      const payload = {
+        id: user.id,
+        email: user.email || null,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await client.from("profiles").upsert(payload, { onConflict: "id" });
+      if (error) throw error;
+    } catch {}
+  }
+
+  async function trySignUp(){
+    const client = getSupabaseClient();
+    if (!client){
+      lockScreen({ silent: true, isError: true, message: "Supabase não configurado. Preencha js/core/supabase-config.js." });
+      return;
+    }
+
+    const email = normalizeText(ui.emailInput?.value || "");
+    const password = String(ui.passwordInput?.value || "");
+
+    if (!email || !email.includes("@")){
+      setMsg("Email inválido.", true);
+      ui.emailInput?.focus();
+      ui.emailInput?.select?.();
+      return;
+    }
+    if (!password || password.length < 6){
+      setMsg("Senha inválida (mín. 6).", true);
+      ui.passwordInput?.focus();
+      ui.passwordInput?.select?.();
+      return;
+    }
+
+    setButtonLoading(ui.loginBtn, true);
+    setButtonLoading(ui.signupBtn, true, "Criando...");
+    setMsg("Criando conta...", false);
+
+    try{
+      const { data, error } = await client.auth.signUp({
+        email,
+        password,
+        options: { data: { app: "mfas_pdv" } },
+      });
+      if (error) throw error;
+
+      await upsertProfile(client, data?.user);
+
+      if (data?.session){
+        unlockScreen(data?.user || data?.session?.user || null);
+        notify("Conta criada ✅", "success");
+        return;
+      }
+
+      setUserInfo(data?.user || null);
+      clearSessionFlag();
+      setLocked(true);
+      if (ui.passwordInput) ui.passwordInput.value = "";
+      setMsg("Conta criada. Confirme seu email e depois faça login.", false);
+      notify("Conta criada. Verifique seu email.", "info");
+    } catch (e){
+      setMsg("Falha ao criar conta: " + (e?.message || "erro"), true);
+    } finally {
+      setButtonLoading(ui.loginBtn, false);
+      setButtonLoading(ui.signupBtn, false);
+    }
+  }
+
+  async function logout(){
+    const client = getSupabaseClient();
+    if (!client){
+      lockScreen({ silent: true, message: "Faça login para continuar." });
+      return;
+    }
+    setButtonLoading(ui.lockBtn, true, "Saindo...");
+    try{
+      await client.auth.signOut();
+    } catch {}
+    setButtonLoading(ui.lockBtn, false);
+    lockScreen({ message: "Você saiu. Faça login novamente.", silent: true });
+    notify("Sessão encerrada.", "info");
   }
 
   if (ui.loginBtn) ui.loginBtn.addEventListener("click", tryLogin);
-  if (ui.clearBtn) ui.clearBtn.addEventListener("click", () => {
-    if (ui.pinInput) ui.pinInput.value = "";
-    setMsg("Informe seu PIN de acesso.", false);
-    focusPin();
-  });
-  if (ui.pinInput) ui.pinInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") tryLogin();
-  });
+  if (ui.signupBtn) ui.signupBtn.addEventListener("click", trySignUp);
+  if (ui.lockBtn) ui.lockBtn.addEventListener("click", logout);
 
-  if (ui.lockBtn) ui.lockBtn.addEventListener("click", () => lockScreen());
-  if (ui.setPinBtn) ui.setPinBtn.addEventListener("click", trySetNewPin);
+  if (ui.emailInput) ui.emailInput.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    if (!ui.passwordInput?.value) {
+      e.preventDefault();
+      ui.passwordInput?.focus();
+      return;
+    }
+    e.preventDefault();
+    tryLogin();
+  });
+  if (ui.passwordInput) ui.passwordInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      tryLogin();
+    }
+  });
 
   document.addEventListener("focusin", (e) => {
     if (!isLocked()) return;
     if (!ui.modal) return;
     if (ui.modal.contains(e.target)) return;
-    focusPinNow();
+    focusPrimaryNow();
   });
 
   // Estado inicial (também corrige qualquer flash do head script)
   updateBrand();
   updateHint();
-  const unlocked = getSessionFlag() === "1";
-  if (!unlocked) forceOperatorRole();
-  setLocked(!unlocked);
-  setMsg("Informe seu PIN de acesso.", false);
-  if (!unlocked) focusPin();
+  const unlockedFlag = getSessionFlag() === "1";
+  if (!unlockedFlag) forceOperatorRole();
+  setLocked(!unlockedFlag);
+  setMsg("Informe seu e-mail e senha.", false);
+  if (!unlockedFlag) focusPrimary();
+
+  (async () => {
+    const client = getSupabaseClient();
+    if (!client){
+      lockScreen({ silent: true, isError: true, message: "Supabase não configurado. Preencha js/core/supabase-config.js." });
+      return;
+    }
+
+    try{
+      const { data, error } = await client.auth.getSession();
+      if (error) throw error;
+      const session = data?.session || null;
+      if (!session){
+        lockScreen({ silent: true, message: "Faça login para continuar." });
+        return;
+      }
+      setUserInfo(session.user);
+      unlockScreen(session.user);
+    } catch {
+      lockScreen({ silent: true, isError: true, message: "Falha ao verificar sessão. Faça login novamente." });
+    }
+
+    try{
+      client.auth.onAuthStateChange((event, session) => {
+        if (event === "SIGNED_OUT"){
+          lockScreen({ silent: true, message: "Faça login para continuar." });
+          return;
+        }
+        if (session?.user) setUserInfo(session.user);
+      });
+    } catch {}
+  })();
 
   window.MVS_ACCESS = Object.freeze({
     isLocked,
     lockScreen,
     unlockScreen,
-    getAccessPin,
-    setAccessPin,
   });
 })();

@@ -203,33 +203,6 @@
         scheduleAutoCashClose();
       }, delay);
     }
-
-    async function restoreAutoBackup(daysAgo = 1){
-      if (!DEMO_STORAGE_MODE) return;
-      const d = new Date();
-      d.setDate(d.getDate() - daysAgo);
-      const key = `${AUTO_BACKUP_PREFIX}${localDateISO(d)}`;
-      const raw = localStorage.getItem(key);
-      if (!raw){
-        toast("Backup de ontem não encontrado.", "error");
-        return;
-      }
-      try{
-        JSON.parse(raw);
-      } catch {
-        toast("Backup inválido.", "error");
-        return;
-      }
-      const ok = await openConfirmModal({
-        title: "Restaurar backup",
-        message: "Restaurar backup de ontem? Isso substitui os dados atuais."
-      });
-      if (!ok) return;
-      localStorage.setItem(DEMO_DB_KEY, raw);
-      updateBackupHint();
-      logEvent("info", "Backup restaurado", `Data: ${localDateISO(d)}`);
-      location.reload();
-    }
     async function loadDiagnostics(){
       if (!els.diagInfo) return;
       setButtonLoading(els.diagRefreshBtn, true);
@@ -2436,11 +2409,6 @@
         frame.contentWindow.focus();
         frame.contentWindow.print();
       }
-    });
-
-    if (els.backupRestoreBtn) els.backupRestoreBtn.addEventListener("click", () => {
-      if (!requireManager()) return;
-      restoreAutoBackup(1);
     });
 
     function openSalesModal(){

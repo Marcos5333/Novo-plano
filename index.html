@@ -50,17 +50,24 @@
         </div>
 
         <div class="accessCardBody">
-          <div class="diagBox" id="accessLoginMsg">Informe seu PIN de acesso.</div>
+          <div class="diagBox" id="accessLoginMsg">Informe seu e-mail e senha.</div>
 
           <div class="field">
-            <label for="accessPinInput">Senha (PIN)</label>
-            <input id="accessPinInput" type="password" inputmode="numeric" autocomplete="current-password" placeholder="••••" maxlength="12" />
+            <label for="accessEmailInput">Email</label>
+            <input id="accessEmailInput" type="email" inputmode="email" autocomplete="username" placeholder="seuemail@exemplo.com" maxlength="120" />
           </div>
 
-          <button class="btn" type="button" id="accessLoginBtn">Entrar</button>
-          <button class="btnGhost" type="button" id="accessPinClearBtn">Limpar</button>
+          <div class="field">
+            <label for="accessPasswordInput">Senha</label>
+            <input id="accessPasswordInput" type="password" autocomplete="current-password" placeholder="••••••••" maxlength="72" />
+          </div>
 
-          <div class="hint" id="accessLoginHint">Primeiro acesso: PIN padrão 0000 (altere em Sistema → Acesso).</div>
+          <div class="formGrid">
+            <button class="btn" type="button" id="accessLoginBtn">Entrar</button>
+            <button class="btnGhost" type="button" id="accessSignupBtn">Criar conta</button>
+          </div>
+
+          <div class="hint" id="accessLoginHint">Ao criar conta, seus dados ficam salvos no Supabase.</div>
         </div>
       </section>
     </div>
@@ -630,6 +637,7 @@
             <div class="sysTitle">Status</div>
             <div id="cashModalStatus" class="diagBox">Carregando...</div>
             <button class="btnGhost" type="button" id="cashResetBtn" data-role-only="manager">Resetar Tudo</button>
+            <button class="btnGhost" type="button" id="cancelSaleBtn" data-role-only="manager">Cancelar venda</button>
           </div>
 
           <div class="sysCard" id="cashOpenCard">
@@ -739,12 +747,17 @@
         <div class="sysGrid">
           <div class="sysCard compact">
             <div class="sysTitle">Backup</div>
-            <div class="formGrid">
+            <div class="sysBtnGrid sysBtnGrid2x2">
               <button class="btn" type="button" id="backupExportBtn" data-role-only="manager">
                 <span class="icon">⬇️</span>Exportar
               </button>
               <button class="btnGhost" type="button" id="backupImportBtn" data-role-only="manager">Importar</button>
+              <button class="btn" type="button" id="cloudBackupSaveBtn" data-role-only="manager">
+                <span class="icon">☁️</span>Salvar na nuvem
+              </button>
+              <button class="btnGhost" type="button" id="cloudBackupRestoreBtn" data-role-only="manager">Restaurar nuvem</button>
             </div>
+            <div class="hint" id="cloudBackupHint">Backup na nuvem: —</div>
             <div class="field">
               <label>Backup automático diário</label>
               <div class="switchRow">
@@ -752,20 +765,10 @@
                 <span>Ativar backup automático (23:50)</span>
               </div>
             </div>
-             <div class="formGrid">
-               <div class="field">
-                 <label>IMPORTAR CARDAPIO</label>
-                 <button class="btnGhost" type="button" id="importXmlBtn" data-role-only="manager">Importar XML</button>
-               </div>
-              <div class="field">
-                <label>EXPORTAR CARDAPIO</label>
-                <button class="btnGhost" type="button" id="exportMenuBtn" data-role-only="manager">Exportar XML/JSON</button>
-              </div>
-              <div class="field">
-                 <label>RESTAURAR BACKUP</label>
-                 <button class="btnGhost" type="button" id="backupRestoreBtn" data-role-only="manager" title="Restaurar backup de ontem" aria-label="Restaurar backup de ontem">Restaurar backup de ontem</button>
-               </div>
-             </div>
+            <div class="sysBtnGrid sysBtnGrid2">
+              <button class="btnGhost" type="button" id="importXmlBtn" data-role-only="manager">Importar Cardápio (XML)</button>
+              <button class="btnGhost" type="button" id="exportMenuBtn" data-role-only="manager">Exportar Cardápio (XML/JSON)</button>
+            </div>
              <input id="backupFileInput" type="file" accept=".sqlite,.db" style="display:none" />
              <input id="xmlFileInput" type="file" accept=".xml,text/xml" style="display:none" />
              <div class="hint" id="backupHint">Backup automático ativo.</div>
@@ -777,20 +780,15 @@
              <div class="formGrid">
                <button class="btnGhost" type="button" id="diagRefreshBtn">Atualizar</button>
                <button class="btnGhost" type="button" id="logClearBtn" data-role-only="manager">Limpar logs</button>
-               <button class="btnGhost" type="button" id="cancelSaleBtn">Cancelar venda</button>
              </div>
              <div class="logList" id="logList"></div>
            </div>
 
            <div class="sysCard compact">
              <div class="sysTitle">Acesso</div>
-             <button class="btnGhost" type="button" id="lockScreenBtn">Bloquear tela</button>
-             <div class="field">
-               <label>Novo PIN de acesso (mín. 4)</label>
-               <input id="accessNewPinInput" data-role-only="manager" type="password" placeholder="Definir novo PIN" maxlength="12" />
-             </div>
-             <button class="btnGhost" type="button" id="accessSetPinBtn" data-role-only="manager">Alterar PIN de acesso</button>
-             <div class="hint">Somente gerente pode trocar o PIN.</div>
+             <div class="diagBox" id="accessUserInfo">Não autenticado.</div>
+             <button class="btnGhost" type="button" id="lockScreenBtn">Sair</button>
+             <div class="hint">Login via Supabase (email e senha).</div>
            </div>
 
            <div class="sysCard compact">
@@ -1166,6 +1164,9 @@
     decoding="async"
   />
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="js/core/supabase-config.js" defer></script>
+  <script src="js/core/supabase-client.js" defer></script>
   <script src="js/core/helpers.js" defer></script>
   <script src="js/app/00-access-login.js" defer></script>
   <script src="js/app/01-bootstrap-demo.js" defer></script>
@@ -1173,6 +1174,7 @@
   <script src="js/app/03-ui-ops-reports-expenses.js" defer></script>
   <script src="js/app/04-system-products-cart-checkout.js" defer></script>
   <script src="js/app/05-import-init.js" defer></script>
+  <script src="js/app/06-cloud-backup.js" defer></script>
 
 </body>
 </html>

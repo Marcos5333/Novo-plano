@@ -34,7 +34,6 @@
       backupImportBtn: document.getElementById("backupImportBtn"),
       backupFileInput: document.getElementById("backupFileInput"),
       backupHint: document.getElementById("backupHint"),
-      backupRestoreBtn: document.getElementById("backupRestoreBtn"),
       companyLogoPreview: document.getElementById("companyLogoPreview"),
       companyNameInput: document.getElementById("companyNameInput"),
       companyNameSaveBtn: document.getElementById("companyNameSaveBtn"),
