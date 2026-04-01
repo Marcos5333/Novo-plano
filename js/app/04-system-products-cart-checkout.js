@@ -218,7 +218,7 @@
         : "preview";
       return {
         mode,
-        printer_name: String(source.printer_name || "").trim(),
+        printer_name: mode === "auto_browser" ? "Padrão do Windows" : "Pré-visualização manual",
         auto_order_print: !!source.auto_order_print,
       };
     }
@@ -252,8 +252,6 @@
     }
 
     function printerDisplayName(settings = printSettings){
-      const name = String(settings?.printer_name || "").trim();
-      if (name) return name;
       return settings?.mode === "auto_browser" ? "Padrão do Windows" : "Pré-visualização manual";
     }
 
@@ -275,14 +273,23 @@
     function previewPrinterSettingsFromUi(){
       return normalizePrintSettings({
         mode: els.printerModeSelect?.value,
-        printer_name: els.printerNameInput?.value,
         auto_order_print: !!els.printerAutoToggle?.checked,
       });
     }
 
+    function syncPrinterNameUi(settings = printSettings){
+      if (!els.printerNameInput) return;
+      const detectedLabel = printerDisplayName(settings);
+      els.printerNameInput.value = detectedLabel;
+      els.printerNameInput.readOnly = true;
+      els.printerNameInput.title = settings.mode === "auto_browser"
+        ? "A página usa a impressora padrão do Windows. O navegador não informa o modelo exato."
+        : "No modo de pré-visualização, a escolha da impressora acontece na janela de impressão.";
+    }
+
     function renderPrinterSettingsUi(){
       if (els.printerModeSelect) els.printerModeSelect.value = printSettings.mode;
-      if (els.printerNameInput) els.printerNameInput.value = printSettings.printer_name || "";
+      syncPrinterNameUi(printSettings);
       if (els.printerAutoToggle) els.printerAutoToggle.checked = !!printSettings.auto_order_print;
       renderPrinterStatus(printSettings);
     }
@@ -291,7 +298,6 @@
       if (!requireManager()) return;
       const next = savePrintSettings({
         mode: String(els.printerModeSelect?.value || DEFAULT_PRINT_SETTINGS.mode),
-        printer_name: String(els.printerNameInput?.value || "").trim(),
         auto_order_print: !!els.printerAutoToggle?.checked,
       });
       toast(`Configuração de impressão salva: ${printerModeLabel(next.mode)}.`, "success");
@@ -1271,10 +1277,9 @@
     if (els.printerSaveBtn) els.printerSaveBtn.addEventListener("click", savePrinterSettingsFromUi);
     if (els.printerTestBtn) els.printerTestBtn.addEventListener("click", testPrinterOutput);
     if (els.printerModeSelect) els.printerModeSelect.addEventListener("change", () => {
-      renderPrinterStatus(previewPrinterSettingsFromUi());
-    });
-    if (els.printerNameInput) els.printerNameInput.addEventListener("input", () => {
-      renderPrinterStatus(previewPrinterSettingsFromUi());
+      const preview = previewPrinterSettingsFromUi();
+      syncPrinterNameUi(preview);
+      renderPrinterStatus(preview);
     });
     if (els.printerAutoToggle) els.printerAutoToggle.addEventListener("change", () => {
       renderPrinterStatus(previewPrinterSettingsFromUi());
@@ -3557,7 +3562,7 @@
 
           closeCheckout();
           setLastOrderId(lastId);
-          await openPrintUrlSmart(`/api/orders/${lastId}/print?prices=1`, { auto: true });
+          await openPrintUrlSmart(`/api/orders/${lastId}/print?prices=1`);
 
           closingTableId = null;
           closingTableIds = null;
@@ -3580,7 +3585,7 @@
 
           closeCheckout();
           setLastOrderId(data.order_id);
-          await openPrintUrlSmart(`/api/orders/${data.order_id}/print?prices=1`, { auto: true });
+          await openPrintUrlSmart(`/api/orders/${data.order_id}/print?prices=1`);
  
            cart.clear();
            renderCart();

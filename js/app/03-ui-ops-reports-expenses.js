@@ -345,6 +345,17 @@
       catch{ return "-"; }
     }
 
+    function getDisplayInitials(value, fallback = "--"){
+      const cleaned = String(value || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^A-Za-z0-9\s]/g, " ")
+        .trim();
+      if (!cleaned) return fallback;
+      const parts = cleaned.split(/\s+/).filter(Boolean);
+      return parts.slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join("");
+    }
+
     function groupOpenTables(rows){
       const byTable = new Map();
       for (const r of rows || []){
@@ -423,30 +434,59 @@
         const ids = g.order_ids.join(",");
         const names = Array.from(g.names || []);
         const namesText = names.length ? names.join(" / ") : "";
+        const guestLabel = names.length > 1 ? "Responsáveis" : "Responsável";
         const itemsList = Array.from(g.items.values());
         const totalItems = itemsList.reduce((acc, it) => acc + Number(it.qty || 0), 0);
         const itemsText = totalItems === 1 ? "1 item" : `${totalItems} itens`;
+        const detailId = `ops-table-detail-${g.table_no || "mesa"}-${ids.replace(/[^0-9,]/g, "").replaceAll(",", "-")}`;
         const toggleId = `ops-items-${g.table_no || "mesa"}-${ids.replace(/[^0-9,]/g, "").replaceAll(",", "-")}`;
         const itemsHtml = itemsList.length
-          ? `<div class="opsItems" id="${escapeHtml(toggleId)}" style="display:none">${itemsList.map(it => {
+          ? `<div class="opsItems mesaItemsList" id="${escapeHtml(toggleId)}">${itemsList.map(it => {
               const notes = (it.notes || "").trim();
               return `<div class="opsMeta">• ${escapeHtml(`${it.qty}x ${it.name}`)}${notes ? ` (${escapeHtml(notes)})` : ""}</div>`;
             }).join("")}</div>`
-          : `<div class="opsMeta">Itens indisponíveis</div>`;
+          : `<div class="opsMeta mesaItemsEmpty">Itens indisponíveis</div>`;
         return `
           <article class="opsItem mesaCard">
-            <div class="mesaHead">
-              <div class="mesaBubble">Mesa ${escapeHtml(mesaNo)}</div>
-              <div class="mesaTotal">${escapeHtml(total)}</div>
+            <div class="mesaHeaderRow">
+              <button class="mesaTrigger" type="button" data-action="toggle-table-card" data-target="${escapeHtml(detailId)}" aria-expanded="false">
+                <div class="mesaTriggerId">
+                  <span>Mesa</span>
+                  <strong>${escapeHtml(mesaNo)}</strong>
+                </div>
+                <div class="mesaTriggerSummary">
+                  <div class="mesaTriggerTotal">${escapeHtml(total)}</div>
+                  <div class="mesaTriggerMeta">${escapeHtml(pedidoTxt)} • ${escapeHtml(itemsText)}</div>
+                </div>
+                <div class="mesaTriggerChevron" aria-hidden="true"></div>
+              </button>
+              <button class="miniBtn mesaQuickAction" type="button" data-action="close-table" data-order-ids="${escapeHtml(ids)}">Fechar</button>
             </div>
-            <div class="opsMeta">${escapeHtml(pedidoTxt)} • ${escapeHtml(itemsText)}</div>
-            ${namesText ? `<div class="opsMeta">${escapeHtml(namesText)}</div>` : ""}
-            <div class="opsMeta">${escapeHtml(fmtDateTime(g.created_at))}</div>
-            <div class="mesaActions">
-              <button class="miniBtn" type="button" data-action="toggle-items" data-target="${escapeHtml(toggleId)}">Ver itens</button>
-              <button class="miniBtn" type="button" data-action="close-table" data-order-ids="${escapeHtml(ids)}">Carregar</button>
+            <div class="mesaDetails" id="${escapeHtml(detailId)}">
+              <div class="mesaDetailsInner">
+                <div class="mesaStats">
+                  <div class="mesaStat">
+                    <span>Pedidos</span>
+                    <strong>${escapeHtml(String(count))}</strong>
+                  </div>
+                  <div class="mesaStat">
+                    <span>Itens</span>
+                    <strong>${escapeHtml(String(totalItems))}</strong>
+                  </div>
+                </div>
+                ${namesText ? `
+                  <div class="mesaGuestLine">
+                    <span>${escapeHtml(guestLabel)}</span>
+                    <strong>${escapeHtml(namesText)}</strong>
+                  </div>
+                ` : ""}
+                <div class="mesaItemsBlock">
+                  <div class="mesaItemsTitle">Itens da mesa</div>
+                  ${itemsHtml}
+                </div>
+                <div class="mesaMoment">Aberta em ${escapeHtml(fmtDateTime(g.created_at))}</div>
+              </div>
             </div>
-            ${itemsHtml}
           </article>
         `;
       }).join("");
@@ -584,29 +624,58 @@
         const countText = itemCount === 1 ? "1 item" : `${itemCount} itens`;
         const orderText = orderCount === 1 ? "1 lançamento" : `${orderCount} lançamentos`;
         const customer = String(r.customer_name || "").trim() || "Cliente sem nome";
+        const initials = getDisplayInitials(customer, "CL");
+        const detailId = `recv-detail-${Number(r.id || 0)}`;
         const toggleId = `recv-items-${Number(r.id || 0)}`;
         const itemsHtml = itemRows.length
-          ? `<div class="opsItems" id="${escapeHtml(toggleId)}" style="display:none">${itemRows.map((it) => {
+          ? `<div class="opsItems receivableItemsList" id="${escapeHtml(toggleId)}">${itemRows.map((it) => {
               const notes = String(it.notes || "").trim();
               return `<div class="opsMeta">• ${escapeHtml(`${it.qty}x ${it.name}`)}${notes ? ` (${escapeHtml(notes)})` : ""}</div>`;
             }).join("")}</div>`
-          : `<div class="opsMeta">Sem itens lançados ainda</div>`;
+          : `<div class="opsMeta receivableItemsEmpty">Sem itens lançados ainda</div>`;
 
         return `
           <article class="opsItem receivableCard">
-            <div class="receivableHead">
-              <div class="receivableName">${escapeHtml(customer)}</div>
-              <div class="receivableTotal">${escapeHtml(total)}</div>
+            <button class="receivableTrigger" type="button" data-action="toggle-receivable-card" data-target="${escapeHtml(detailId)}" aria-expanded="false">
+              <div class="receivableTriggerMain">
+                <div class="receivableIdentity">
+                  <div class="receivableAvatar">${escapeHtml(initials)}</div>
+                  <div class="receivableIdentityText">
+                    <div class="receivableEyebrow">Conta do cliente</div>
+                    <div class="receivableName">${escapeHtml(customer)}</div>
+                    <div class="receivableTriggerMeta">${escapeHtml(orderText)} • ${escapeHtml(countText)}</div>
+                  </div>
+                </div>
+              </div>
+              <div class="receivableTriggerSide">
+                <div class="receivableStatus">Em aberto</div>
+                <div class="receivableTriggerTotal">${escapeHtml(total)}</div>
+              </div>
+              <div class="receivableTriggerChevron" aria-hidden="true"></div>
+            </button>
+            <div class="receivableDetails" id="${escapeHtml(detailId)}">
+              <div class="receivableDetailsInner">
+                <div class="receivableTimestamp">Desde ${escapeHtml(fmtDateTime(r.created_at))}</div>
+                <div class="receivableStats">
+                  <div class="receivableStat">
+                    <span>Lançamentos</span>
+                    <strong>${escapeHtml(String(orderCount))}</strong>
+                  </div>
+                  <div class="receivableStat">
+                    <span>Itens</span>
+                    <strong>${escapeHtml(String(itemCount))}</strong>
+                  </div>
+                </div>
+                <div class="receivableItemsBlock">
+                  <div class="receivableItemsTitle">Itens da conta</div>
+                  ${itemsHtml}
+                </div>
+                <div class="receivableActions">
+                  <button class="miniBtn" type="button" data-action="add-receivable-items" data-id="${escapeHtml(String(r.id))}">Adicionar itens</button>
+                  <button class="miniBtn wide" type="button" data-action="close-receivable" data-id="${escapeHtml(String(r.id))}">Fechar no carrinho</button>
+                </div>
+              </div>
             </div>
-            <div class="receivableStatus">Em aberto</div>
-            <div class="opsMeta">${escapeHtml(orderText)} • ${escapeHtml(countText)}</div>
-            <div class="opsMeta">${escapeHtml(fmtDateTime(r.created_at))}</div>
-            <div class="receivableActions">
-              <button class="miniBtn" type="button" data-action="toggle-items" data-target="${escapeHtml(toggleId)}">Ver itens</button>
-              <button class="miniBtn" type="button" data-action="add-receivable-items" data-id="${escapeHtml(String(r.id))}">Adicionar itens</button>
-              <button class="miniBtn wide" type="button" data-action="close-receivable" data-id="${escapeHtml(String(r.id))}">Fechar no carrinho</button>
-            </div>
-            ${itemsHtml}
           </article>
         `;
       }).join("");
@@ -876,14 +945,19 @@
       const btn = e.target.closest("button[data-action]");
       if (!btn) return;
       const action = btn.dataset.action;
-      if (action === "toggle-items"){
-        const targetId = btn.dataset.target;
-        if (!targetId) return;
-        const el = document.getElementById(targetId);
-        if (!el) return;
-        const visible = el.style.display !== "none";
-        el.style.display = visible ? "none" : "grid";
-        btn.textContent = visible ? "Ver itens" : "Ocultar itens";
+      if (action === "toggle-table-card"){
+        const card = btn.closest(".mesaCard");
+        if (!card) return;
+        const expand = !card.classList.contains("is-expanded");
+        els.opsTables.querySelectorAll(".mesaCard.is-expanded").forEach((item) => {
+          if (item !== card){
+            item.classList.remove("is-expanded");
+            const toggle = item.querySelector("[data-action='toggle-table-card']");
+            if (toggle) toggle.setAttribute("aria-expanded", "false");
+          }
+        });
+        card.classList.toggle("is-expanded", expand);
+        btn.setAttribute("aria-expanded", expand ? "true" : "false");
         return;
       }
       if (action === "close-table"){
@@ -928,14 +1002,19 @@
       const btn = e.target.closest("button[data-action]");
       if (!btn) return;
       const action = String(btn.dataset.action || "");
-      if (action === "toggle-items"){
-        const targetId = btn.dataset.target;
-        if (!targetId) return;
-        const el = document.getElementById(targetId);
-        if (!el) return;
-        const visible = el.style.display !== "none";
-        el.style.display = visible ? "none" : "grid";
-        btn.textContent = visible ? "Ver itens" : "Ocultar itens";
+      if (action === "toggle-receivable-card"){
+        const card = btn.closest(".receivableCard");
+        if (!card) return;
+        const expand = !card.classList.contains("is-expanded");
+        els.receivableList.querySelectorAll(".receivableCard.is-expanded").forEach((item) => {
+          if (item !== card){
+            item.classList.remove("is-expanded");
+            const toggle = item.querySelector("[data-action='toggle-receivable-card']");
+            if (toggle) toggle.setAttribute("aria-expanded", "false");
+          }
+        });
+        card.classList.toggle("is-expanded", expand);
+        btn.setAttribute("aria-expanded", expand ? "true" : "false");
         return;
       }
 

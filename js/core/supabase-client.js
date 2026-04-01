@@ -9,6 +9,7 @@
   const cfg = window.MVS_SUPABASE_CONFIG || {};
   const url = String(cfg.url || safeGet(localStorage, STORAGE_URL_KEY) || "").trim();
   const anonKey = String(cfg.anonKey || safeGet(localStorage, STORAGE_ANON_KEY) || "").trim();
+  const resetRedirectUrl = String(cfg.resetRedirectUrl || "").trim();
 
   let client = null;
   let initError = "";
@@ -37,10 +38,10 @@
   window.MVS_SUPABASE = Object.freeze({
     client,
     url,
+    resetRedirectUrl,
     isConfigured: !!client,
     initError,
     STORAGE_URL_KEY,
     STORAGE_ANON_KEY,
   });
 })();
-
