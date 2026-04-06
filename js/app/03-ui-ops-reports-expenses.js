@@ -935,6 +935,8 @@
 
     function openOpsTablesModal(){
       if (!els.opsTablesModal) return;
+      if (typeof closeOtherModals === "function") closeOtherModals();
+      else if (typeof closeMobileMenu === "function") closeMobileMenu();
       els.opsTablesModal.style.display = "flex";
       loadOpsData();
       startOpsPolling();
@@ -942,6 +944,8 @@
 
     function openOpsKitchenModal(){
       if (!els.opsKitchenModal) return;
+      if (typeof closeOtherModals === "function") closeOtherModals();
+      else if (typeof closeMobileMenu === "function") closeMobileMenu();
       els.opsKitchenModal.style.display = "flex";
       loadOpsData();
       startOpsPolling();
@@ -949,6 +953,8 @@
 
     function openReceivableModal(){
       if (!els.receivableModal) return;
+      if (typeof closeOtherModals === "function") closeOtherModals();
+      else if (typeof closeMobileMenu === "function") closeMobileMenu();
       els.receivableModal.style.display = "flex";
       loadReceivablesData();
       startOpsPolling();
@@ -972,6 +978,8 @@
 
     function openDeliveryModal(){
       if (!els.deliveryModal) return;
+      if (typeof closeOtherModals === "function") closeOtherModals();
+      else if (typeof closeMobileMenu === "function") closeMobileMenu();
       els.deliveryModal.style.display = "flex";
       loadDeliveryData();
       if (deliveryPoll) clearInterval(deliveryPoll);

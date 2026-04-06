@@ -198,6 +198,7 @@ function createApiHandler({ dataFile } = {}){
     if (initialized || db.access_invites.length > 0 || !ACCESS_INVITE_CODES.length){
       if (db.access_invites.length > 0 && !initialized){
         db.meta.access_invites_initialized = true;
+        return true;
       }
       return false;
     }
@@ -237,6 +238,16 @@ function createApiHandler({ dataFile } = {}){
     const normalizedCode = normalizeInviteCode(code);
     if (!normalizedCode) return null;
     return getAccessInviteRows(db).find((row) => row.active && row.code === normalizedCode) || null;
+  }
+
+  function getSortedAccessInviteRows(db){
+    return getAccessInviteRows(db).sort((a, b) => {
+      if (Number(b.active) !== Number(a.active)) return Number(b.active) - Number(a.active);
+      const ta = new Date(String(a.updated_at || a.created_at || "")).getTime();
+      const tb = new Date(String(b.updated_at || b.created_at || "")).getTime();
+      if (Number.isFinite(ta) && Number.isFinite(tb) && tb !== ta) return tb - ta;
+      return Number(b.id || 0) - Number(a.id || 0);
+    });
   }
 
   function findAccessInviteIndexById(db, id){
@@ -1303,14 +1314,7 @@ ${bodyHtml}
       const owner = await requireOwnerAccess(req, res);
       if (!owner) return;
 
-      const rows = getAccessInviteRows(db)
-        .sort((a, b) => {
-          if (Number(b.active) !== Number(a.active)) return Number(b.active) - Number(a.active);
-          const ta = new Date(String(a.updated_at || a.created_at || "")).getTime();
-          const tb = new Date(String(b.updated_at || b.created_at || "")).getTime();
-          if (Number.isFinite(ta) && Number.isFinite(tb) && tb !== ta) return tb - ta;
-          return Number(b.id || 0) - Number(a.id || 0);
-        });
+      const rows = getSortedAccessInviteRows(db);
 
       sendJson(res, 200, {
         ok: true,

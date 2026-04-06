@@ -1,20 +1,34 @@
 # Backend do PDV
 
-O projeto agora pode rodar em 2 modos, sem quebrar o fluxo atual:
+## O que esse backend faz
 
-- `demo local`: abrindo o `index.html` direto, continua usando a API fake no navegador.
-- `backend real`: abrindo pelo servidor Node, o front usa automaticamente a API do servidor.
+Hoje o projeto pode rodar de dois jeitos:
 
-## Como subir
+- se você abrir só o `index.html`, ele continua no modo demo/local
+- se você subir o servidor Node, a tela usa o backend real automaticamente
 
-1. Tenha o Node.js 18+ instalado.
-2. Na pasta do projeto, rode:
+Na prática, isso permitiu colocar:
+
+- dados salvos no servidor
+- backup centralizado
+- domínio próprio na Railway
+- cadastro por convite
+- painel de convites para o dono da conta
+
+Sem precisar refazer o frontend.
+
+## Como rodar no computador
+
+Se for usar localmente:
+
+1. instale o Node.js 18 ou superior
+2. na pasta do projeto, rode:
 
 ```bash
 npm start
 ```
 
-3. Abra no navegador:
+3. depois abra:
 
 ```text
 http://localhost:8787
@@ -22,86 +36,79 @@ http://localhost:8787
 
 ## Onde os dados ficam
 
-O backend salva a base em:
+No ambiente local, a base fica aqui:
 
 ```text
 data/app-db.json
 ```
 
-Se o arquivo não existir, ele é criado automaticamente.
+Se o arquivo não existir, o sistema cria sozinho.
 
-## Migração segura dos dados do modo demo
+## Se você já tem dados no modo antigo
 
-Para não perder nada:
+O jeito mais seguro de migrar é simples:
 
-1. Abra o sistema no modo atual.
-2. Exporte um backup pelo menu de sistema.
-3. Suba o backend com `npm start`.
-4. Abra `http://localhost:8787`.
-5. Importe o mesmo backup pelo menu de sistema.
+1. abra o sistema antigo
+2. exporte um backup pelo menu do sistema
+3. suba o backend com `npm start`
+4. abra `http://localhost:8787`
+5. importe o mesmo backup
 
-Assim você migra os dados locais para o servidor sem alterar o frontend.
+Isso evita susto e mantém o frontend igual.
 
-## Observações
+## Como ficou na Railway
 
-- O backend inicial usa arquivo JSON no servidor, porque esse é o jeito mais seguro de começar sem quebrar as rotas atuais.
-- As rotas `/api/*` foram mantidas compatíveis com o front existente.
-- Em um próximo passo, dá para trocar a persistência JSON por PostgreSQL sem mexer nas telas.
+O projeto já está preparado para deploy.
 
-## Deploy na Railway
+Hoje usamos:
 
-O projeto já está preparado para a Railway com:
-
-- `node server/server.js` como comando de inicialização na Railway
+- `node server/server.js` para subir o serviço
 - `railway.json` com healthcheck em `/health`
-- uso automático do volume da Railway quando `RAILWAY_VOLUME_MOUNT_PATH` estiver disponível
-- suporte a host canônico com redirecionamento opcional do domínio raiz para o `www`
+- volume para persistir o `app-db.json`
+- domínio canônico com redirecionamento para o `www`
 
-### Passo a passo
+## Passo a passo da Railway
 
-1. Suba este repositório para o GitHub.
-2. Na Railway, crie um projeto novo e conecte o repositório.
-3. Ao criar o serviço, deixe a Railway detectar como app Node.
-4. Depois do primeiro deploy, adicione um `Volume`.
-5. Monte o volume no serviço.
+Quando for subir do zero:
 
-Observação:
+1. mande o projeto para o GitHub
+2. conecte o repositório na Railway
+3. deixe a Railway detectar como app Node
+4. depois do primeiro deploy, crie um volume
+5. monte esse volume em `/data`
 
-- localmente você pode continuar usando `npm start`
-- na Railway o projeto sobe direto com `node server/server.js`, o que evita logs confusos do `npm` durante reinícios e redeploys
+Com isso, o backend passa a salvar no volume e não perde os dados em restart.
 
-### Persistência
+## Onde a Railway salva a base
 
-Se houver volume montado, o backend salva automaticamente em:
+Se tiver volume montado, o sistema usa:
 
 ```text
 $RAILWAY_VOLUME_MOUNT_PATH/app-db.json
 ```
 
-Se quiser forçar outro caminho, defina:
+Se um dia você quiser forçar outro caminho:
 
 ```text
 MVS_DATA_FILE=/caminho/do/arquivo/app-db.json
 ```
 
-### Domínio principal (`www`) e redirecionamento do raiz
+## Domínio principal
 
-Se quiser que o servidor redirecione automaticamente:
-
-- `mvspdv.com.br` -> `www.mvspdv.com.br`
-
-defina na Railway:
+Se a ideia for usar o `www` como endereço principal, deixe essas variáveis:
 
 ```text
 MVS_CANONICAL_HOST=www.mvspdv.com.br
 MVS_REDIRECT_HOSTS=mvspdv.com.br
 ```
 
-Assim, qualquer acesso ao domínio raiz que chegar no backend será redirecionado com `308` para o `www`, preservando rota e parâmetros da URL.
+Assim, se alguém entrar pelo domínio sem `www`, o sistema manda para o endereço certo sozinho.
 
-### Cadastro por convite com Supabase
+## Cadastro por convite
 
-Se quiser que o cadastro de usuários seja controlado pelo backend:
+Se quiser manter o cadastro fechado e só liberar quem você autorizar, o backend já faz isso.
+
+As variáveis são estas:
 
 ```text
 MVS_SUPABASE_URL=https://SEU-PROJETO.supabase.co
@@ -110,36 +117,62 @@ MVS_ACCESS_INVITE_CODES=CODIGO1,CODIGO2,CODIGO3
 MVS_ACCESS_OWNER_EMAILS=voce@seudominio.com
 ```
 
-Com isso:
+O papel de cada uma:
 
-- o frontend envia o cadastro para `/api/access/signup`
-- o backend valida o código de convite
-- a conta é criada no Supabase com a `service_role`
-- o usuário deixa de depender do signup público
-- o painel de convites fica disponível só para os emails listados em `MVS_ACCESS_OWNER_EMAILS`
+- `MVS_SUPABASE_URL`: endereço do projeto no Supabase
+- `MVS_SUPABASE_SERVICE_ROLE_KEY`: chave do backend para criar usuários com segurança
+- `MVS_ACCESS_INVITE_CODES`: convites iniciais
+- `MVS_ACCESS_OWNER_EMAILS`: emails que podem abrir o painel de convites
 
-Importante:
+## Como isso funciona na prática
 
-- a `service_role` deve ficar só na Railway/backend
-- nunca coloque a `service_role` no frontend
-- os códigos de convite agora ficam só no servidor
-- o email do proprietário também fica configurado no servidor
+Depois dessa configuração:
 
-No Supabase, depois de configurar isso, desative o cadastro público em:
+- o cadastro novo não passa mais direto pelo navegador
+- a tela manda os dados para `/api/access/signup`
+- o backend confere o código de convite
+- se estiver certo, ele cria a conta no Supabase
 
-- `Authentication` -> `General configuration`
-- desligue `Allow new users to sign up`
+No Supabase, o ideal é deixar o cadastro público desligado:
 
-Depois do primeiro deploy com essa estrutura:
+- `Authentication`
+- `General configuration`
+- desligar `Allow new users to sign up`
 
-- os códigos iniciais de `MVS_ACCESS_INVITE_CODES` são trazidos para a base do backend
-- novos convites podem ser criados, bloqueados e excluídos pelo painel, sem redeploy
+## Painel de convites
 
-### Migração dos dados atuais
+Depois do primeiro deploy com essas variáveis:
 
-1. Abra o sistema antigo.
-2. Exporte o backup JSON pelo menu do sistema.
-3. Abra a URL do projeto na Railway.
-4. Importe o backup no sistema já rodando na Railway.
+- os convites iniciais de `MVS_ACCESS_INVITE_CODES` entram na base do backend
+- dali para frente você pode criar, bloquear e excluir convites pelo sistema
+- não precisa redeploy para mexer nos convites do painel
 
-Assim você sobe no gratuito primeiro e mantém um caminho limpo para depois mudar para o plano Hobby sem refazer a app.
+Esse painel aparece só para quem estiver logado com um email listado em:
+
+```text
+MVS_ACCESS_OWNER_EMAILS
+```
+
+Se quiser mais de um dono:
+
+```text
+MVS_ACCESS_OWNER_EMAILS=email1@dominio.com,email2@dominio.com
+```
+
+## O que vale saber sem enrolação
+
+- o sistema hoje está confiável para um cliente e um uso mais controlado
+- ele ainda usa JSON como base, não banco SQL
+- isso foi escolha para subir rápido sem quebrar o que já existia
+- se um dia crescer mais, a próxima evolução natural é migrar a persistência para Postgres/Supabase
+
+## Resumo honesto
+
+Hoje a estrutura está boa para:
+
+- rodar o PDV com domínio próprio
+- salvar tudo no servidor
+- controlar cadastro por convite
+- manter um painel de convites só para você
+
+Sem mexer no jeito que o usuário final usa o sistema.

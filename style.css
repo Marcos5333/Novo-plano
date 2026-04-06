@@ -3056,6 +3056,157 @@
       }
     }
 
+    @media (max-width: 720px){
+      #opsTablesModal .modal,
+      #opsKitchenModal .modal,
+      #deliveryModal .modal,
+      #receivableModal .modal{
+        width:100%;
+        max-width:none;
+        max-height:calc(100vh - 16px);
+        max-height:calc(100dvh - 16px);
+        border-radius:20px;
+      }
+      #opsTablesModal .modalHeader,
+      #opsKitchenModal .modalHeader,
+      #deliveryModal .modalHeader,
+      #receivableModal .modalHeader{
+        align-items:stretch;
+        gap:10px;
+      }
+      #opsTablesModal .modalHeader h3,
+      #opsKitchenModal .modalHeader h3,
+      #deliveryModal .modalHeader h3,
+      #receivableModal .modalHeader h3{
+        font-size:16px;
+        line-height:1.25;
+      }
+      #opsTablesModal .modalHeader > div,
+      #opsKitchenModal .modalHeader > div,
+      #deliveryModal .modalHeader > div,
+      #receivableModal .modalHeader > div{
+        width:100%;
+        justify-content:space-between;
+        flex-wrap:wrap;
+      }
+      #opsTablesModal .modalHeader .btnGhost,
+      #opsKitchenModal .modalHeader .btnGhost,
+      #deliveryModal .modalHeader .btnGhost,
+      #receivableModal .modalHeader .btnGhost{
+        flex:1 1 0;
+        min-width:0;
+      }
+      #opsTablesModal .closeX,
+      #opsKitchenModal .closeX,
+      #deliveryModal .closeX,
+      #receivableModal .closeX{
+        flex:0 0 42px;
+      }
+      #opsTablesModal .modalBody,
+      #opsKitchenModal .modalBody,
+      #deliveryModal .modalBody,
+      #receivableModal .modalBody{
+        padding:12px;
+        gap:12px;
+      }
+      #opsTablesModal .opsCard,
+      #opsKitchenModal .opsCard,
+      #deliveryModal .opsCard,
+      #receivableModal .opsCard{
+        padding:12px;
+        border-radius:16px;
+      }
+      .deliveryCard,
+      .kitchenCard,
+      .mesaCard{
+        border-radius:18px;
+      }
+      .deliveryHead,
+      .kitchenHead{
+        flex-wrap:wrap;
+        align-items:flex-start;
+      }
+      .deliveryCard .miniBtn,
+      .kitchenCard .miniBtn,
+      .mesaQuickAction{
+        min-height:44px;
+      }
+    }
+
+    @media (max-width: 560px){
+      #opsTablesModal .modalHeader,
+      #opsKitchenModal .modalHeader,
+      #deliveryModal .modalHeader,
+      #receivableModal .modalHeader{
+        padding:12px;
+      }
+      #opsTablesModal .modalHeader > div,
+      #opsKitchenModal .modalHeader > div,
+      #deliveryModal .modalHeader > div,
+      #receivableModal .modalHeader > div{
+        display:grid;
+        grid-template-columns:minmax(0, 1fr) auto;
+        gap:8px;
+        align-items:center;
+      }
+      #opsTablesModal .modalHeader .btnGhost,
+      #opsKitchenModal .modalHeader .btnGhost,
+      #deliveryModal .modalHeader .btnGhost,
+      #receivableModal .modalHeader .btnGhost{
+        width:100%;
+        padding-inline:12px;
+      }
+      .mesaHeaderRow{
+        display:grid;
+        grid-template-columns:1fr;
+        gap:10px;
+        align-items:stretch;
+      }
+      .mesaTrigger{
+        width:100%;
+        grid-template-columns:minmax(0, 1fr) auto;
+        gap:10px;
+      }
+      .mesaTriggerId{
+        min-width:0;
+      }
+      .mesaTriggerId strong{
+        font-size:20px;
+      }
+      .mesaTriggerSummary{
+        gap:3px;
+      }
+      .mesaTriggerTotal{
+        font-size:16px;
+      }
+      .mesaTriggerMeta{
+        font-size:10px;
+        line-height:1.35;
+      }
+      .mesaQuickAction{
+        width:100%;
+        margin-left:0;
+      }
+      .deliveryHead{
+        gap:6px;
+      }
+      .deliveryStatus,
+      .deliveryTotal,
+      .kitchenStatus,
+      .kitchenQty{
+        max-width:100%;
+      }
+      .deliveryCard .opsMeta,
+      .kitchenCard .opsMeta,
+      .mesaMoment{
+        font-size:10px;
+        line-height:1.45;
+      }
+      .opsItem .miniBtn{
+        white-space:normal;
+      }
+    }
+
     /* ===== Relatórios ===== */
     .reportGrid{
       display:grid;

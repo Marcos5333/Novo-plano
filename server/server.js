@@ -29,7 +29,6 @@ const MIME_TYPES = Object.freeze({
 
 const api = createApiHandler({
   dataFile: DATA_FILE,
-  startedAt: Date.now(),
 });
 
 function sendText(res, statusCode, text, contentType = "text/plain; charset=utf-8"){
@@ -84,20 +83,28 @@ window.MVS_RUNTIME_CONFIG = Object.assign(
 }
 
 function resolveStaticPath(urlPath){
-  const cleanPath = decodeURIComponent(String(urlPath || "/"));
+  let cleanPath = "/";
+  try{
+    cleanPath = decodeURIComponent(String(urlPath || "/"));
+  } catch {
+    return { ok: false, statusCode: 400, message: "URL inválida." };
+  }
   const relativePath = cleanPath === "/" ? "/index.html" : cleanPath;
   const absolutePath = path.resolve(ROOT_DIR, `.${relativePath}`);
   const rootWithSep = ROOT_DIR.endsWith(path.sep) ? ROOT_DIR : `${ROOT_DIR}${path.sep}`;
-  if (absolutePath !== ROOT_DIR && !absolutePath.startsWith(rootWithSep)) return null;
-  return absolutePath;
+  if (absolutePath !== ROOT_DIR && !absolutePath.startsWith(rootWithSep)){
+    return { ok: false, statusCode: 403, message: "Acesso negado." };
+  }
+  return { ok: true, path: absolutePath };
 }
 
 function serveStatic(req, res, urlObj){
-  const filePath = resolveStaticPath(urlObj.pathname);
-  if (!filePath){
-    sendText(res, 403, "Acesso negado.");
+  const resolved = resolveStaticPath(urlObj.pathname);
+  if (!resolved?.ok){
+    sendText(res, Number(resolved?.statusCode || 403), resolved?.message || "Acesso negado.");
     return;
   }
+  const filePath = resolved.path;
 
   let finalPath = filePath;
   if (!fs.existsSync(finalPath) || fs.statSync(finalPath).isDirectory()){
