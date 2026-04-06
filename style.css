@@ -1391,19 +1391,25 @@
     @media (max-width: 560px){
       #accessLoginModal{
         padding:12px;
-        --access-card-w:min(100%, 360px);
+        --access-card-w:min(100%, 340px);
+        align-items:center;
+        justify-content:center;
       }
       #accessLoginModal .accessLayout{
-        width:100%;
-        max-width:420px;
-        min-height:auto;
-        align-content:start;
+        width:min(100%, 340px);
+        max-width:340px;
+        min-height:calc(100vh - 24px);
+        min-height:calc(100dvh - 24px);
+        align-content:center;
+        justify-items:stretch;
         gap:12px;
+        padding:0;
       }
       #accessLoginModal .accessCard{
         width:100%;
         max-width:100%;
         margin:0 auto;
+        min-height:auto;
         border-radius:18px;
       }
       #accessLoginModal .accessCardHead{
@@ -2618,7 +2624,10 @@
     .deliveryCard{
       display:grid;
       align-content:start;
+      justify-items:stretch;
       gap:8px;
+      width:100%;
+      box-sizing:border-box;
       border-radius:22px;
       background: linear-gradient(180deg, #ffffff, #fbfdff);
       border:1px solid rgba(148,163,184,.22);
@@ -2672,7 +2681,12 @@
       color:#64748b;
     }
     .deliveryCard .miniBtn{
+      display:flex;
+      align-items:center;
       width:100%;
+      max-width:none;
+      align-self:stretch;
+      justify-self:stretch;
       justify-content:center;
       margin-top:4px;
     }
@@ -3192,33 +3206,42 @@
       .mesaHeaderRow{
         display:grid;
         grid-template-columns:minmax(0, 1fr) auto;
-        gap:8px;
+        gap:6px;
         align-items:center;
-        padding:12px;
+        padding:10px 12px;
       }
       .mesaTrigger{
         width:100%;
-        grid-template-columns:auto minmax(0, 1fr) auto;
-        gap:8px;
-        align-items:center;
-      }
-      .mesaTriggerId{
         display:flex;
         align-items:center;
-        gap:6px;
+        gap:8px;
         min-width:0;
       }
+      .mesaTriggerId{
+        display:inline-flex;
+        align-items:baseline;
+        gap:4px;
+        min-width:0;
+        flex:0 0 auto;
+      }
       .mesaTriggerId span{
-        display:none;
+        display:inline;
+        font-size:10px;
+        font-weight:1000;
+        letter-spacing:.12em;
+        text-transform:uppercase;
+        color:#64748b;
       }
       .mesaTriggerId strong{
-        font-size:19px;
+        font-size:18px;
         white-space:nowrap;
       }
       .mesaTriggerSummary{
-        display:flex;
+        display:inline-flex;
         align-items:center;
+        justify-content:flex-end;
         min-width:0;
+        flex:1 1 auto;
       }
       .mesaTriggerTotal{
         font-size:15px;
@@ -3240,6 +3263,7 @@
         padding:8px 12px;
         font-size:13px;
         border-radius:10px;
+        justify-self:end;
       }
       .mesaCard.is-expanded .mesaTriggerChevron{
         margin-top:0;
