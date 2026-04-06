@@ -92,6 +92,11 @@
     window.addEventListener("unhandledrejection", (e) => {
       logError("Promise rejeitada", e?.reason || e);
     });
+    window.addEventListener("mvs-owner-access-changed", () => {
+      try{
+        applyRoleLocks();
+      } catch {}
+    });
 
     // ===== Estado Caixa =====
     const LS_SHIFT = "mvs_shift_state_v1";
@@ -147,6 +152,17 @@
         if (tag === "button" || tag === "input" || tag === "select" || tag === "textarea"){
           el.disabled = locked;
         }
+      });
+
+      const ownerLocked = !(window.MVS_ACCESS?.isOwner?.());
+      document.querySelectorAll("[data-owner-only='true']").forEach(el => {
+        const tag = el.tagName.toLowerCase();
+        if (tag === "button" || tag === "input" || tag === "select" || tag === "textarea"){
+          el.disabled = ownerLocked;
+        } else {
+          el.style.display = ownerLocked ? "none" : (el.dataset.ownerDisplay || "");
+        }
+        el.setAttribute("aria-hidden", ownerLocked ? "true" : "false");
       });
     }
 

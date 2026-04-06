@@ -107,6 +107,7 @@ Se quiser que o cadastro de usuários seja controlado pelo backend:
 MVS_SUPABASE_URL=https://SEU-PROJETO.supabase.co
 MVS_SUPABASE_SERVICE_ROLE_KEY=sua_service_role_key
 MVS_ACCESS_INVITE_CODES=CODIGO1,CODIGO2,CODIGO3
+MVS_ACCESS_OWNER_EMAILS=voce@seudominio.com
 ```
 
 Com isso:
@@ -115,17 +116,24 @@ Com isso:
 - o backend valida o código de convite
 - a conta é criada no Supabase com a `service_role`
 - o usuário deixa de depender do signup público
+- o painel de convites fica disponível só para os emails listados em `MVS_ACCESS_OWNER_EMAILS`
 
 Importante:
 
 - a `service_role` deve ficar só na Railway/backend
 - nunca coloque a `service_role` no frontend
 - os códigos de convite agora ficam só no servidor
+- o email do proprietário também fica configurado no servidor
 
 No Supabase, depois de configurar isso, desative o cadastro público em:
 
 - `Authentication` -> `General configuration`
 - desligue `Allow new users to sign up`
+
+Depois do primeiro deploy com essa estrutura:
+
+- os códigos iniciais de `MVS_ACCESS_INVITE_CODES` são trazidos para a base do backend
+- novos convites podem ser criados, bloqueados e excluídos pelo painel, sem redeploy
 
 ### Migração dos dados atuais
 

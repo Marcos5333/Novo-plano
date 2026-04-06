@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>MFAS PDV </title>
-  <link rel="stylesheet" href="style.css?v=20260401j" />
+  <link rel="stylesheet" href="style.css?v=20260406k" />
   <script>
     (function(){
       try{
@@ -906,6 +906,31 @@
              <div class="hint">Login via Supabase (email e senha).</div>
            </div>
 
+           <div
+             class="sysCard"
+             id="ownerInviteCard"
+             data-owner-only="true"
+             data-owner-display="grid"
+             style="display:none"
+           >
+             <div class="sysTitle">Convites</div>
+             <div class="diagBox" id="accessInviteOwnerHint">Acesso restrito ao proprietário.</div>
+             <div class="field">
+               <label for="accessInviteLabelInput">Descrição do convite</label>
+               <input id="accessInviteLabelInput" data-owner-only="true" placeholder="Ex: Cliente Loja 01" maxlength="80" />
+             </div>
+             <div class="field">
+               <label for="accessInviteCodeInput">Código do convite</label>
+               <input id="accessInviteCodeInput" data-owner-only="true" placeholder="Deixe vazio para gerar automático" maxlength="80" />
+             </div>
+             <div class="formGrid">
+               <button class="btn" type="button" id="accessInviteCreateBtn" data-owner-only="true">Criar convite</button>
+               <button class="btnGhost" type="button" id="accessInviteRefreshBtn" data-owner-only="true">Atualizar</button>
+             </div>
+             <div class="logList inviteList" id="accessInviteList"></div>
+             <div class="hint">Somente o proprietário pode criar, bloquear e excluir convites.</div>
+           </div>
+
            <div class="sysCard compact">
              <div class="sysTitle">Tema</div>
              <div class="switchRow">
@@ -1287,11 +1312,11 @@
   <script src="js/core/supabase-config.js?v=20260406c" defer></script>
   <script src="js/core/supabase-client.js?v=20260331a" defer></script>
   <script src="js/core/helpers.js?v=20260320b" defer></script>
-  <script src="js/app/00-access-login.js?v=20260406c" defer></script>
+  <script src="js/app/00-access-login.js?v=20260406d" defer></script>
   <script src="js/app/01-bootstrap-demo.js?v=20260320b" defer></script>
-  <script src="js/app/02-logs-state-products.js?v=20260320b" defer></script>
-  <script src="js/app/03-ui-ops-reports-expenses.js?v=20260401e" defer></script>
-  <script src="js/app/04-system-products-cart-checkout.js?v=20260401b" defer></script>
+  <script src="js/app/02-logs-state-products.js?v=20260406b" defer></script>
+  <script src="js/app/03-ui-ops-reports-expenses.js?v=20260406b" defer></script>
+  <script src="js/app/04-system-products-cart-checkout.js?v=20260406b" defer></script>
   <script src="js/app/05-import-init.js?v=20260320b" defer></script>
   <script src="js/app/06-cloud-backup.js?v=20260320b" defer></script>
 

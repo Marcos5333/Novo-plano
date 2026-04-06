@@ -9,6 +9,8 @@
   });
 
   let accessMode = MODES.LOGIN;
+  let currentUser = null;
+  let ownerAccess = false;
 
   const ui = {
     modal: document.getElementById("accessLoginModal"),
@@ -80,6 +82,21 @@
 
   function normalizeText(value){
     return String(value ?? "").trim();
+  }
+
+  function normalizeEmail(value){
+    return String(value ?? "").trim().toLowerCase();
+  }
+
+  function notifyOwnerAccessChanged(){
+    try{
+      window.dispatchEvent(new CustomEvent("mvs-owner-access-changed", {
+        detail: {
+          owner: ownerAccess,
+          email: normalizeEmail(currentUser?.email || ""),
+        },
+      }));
+    } catch {}
   }
 
   function normalizeInviteCode(value){
@@ -419,9 +436,46 @@
   }
 
   function setUserInfo(user){
+    currentUser = user || null;
     if (!ui.userInfo) return;
     const email = normalizeText(user?.email || "");
     ui.userInfo.textContent = email ? `Conectado como: ${email}` : "Não autenticado.";
+  }
+
+  async function getSessionAccessToken(){
+    const client = getSupabaseClient();
+    if (!client) return "";
+    try{
+      const { data, error } = await client.auth.getSession();
+      if (error) throw error;
+      return String(data?.session?.access_token || "").trim();
+    } catch {
+      return "";
+    }
+  }
+
+  async function getAuthHeaders(){
+    const token = await getSessionAccessToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
+  async function refreshOwnerAccess(){
+    const client = getSupabaseClient();
+    if (!client){
+      ownerAccess = false;
+      notifyOwnerAccessChanged();
+      return false;
+    }
+    try{
+      const headers = await getAuthHeaders();
+      const resp = await fetch("/api/access/owner-status", { headers });
+      const data = await resp.json().catch(() => null);
+      ownerAccess = !!(resp.ok && data?.ok && data?.owner);
+    } catch {
+      ownerAccess = false;
+    }
+    notifyOwnerAccessChanged();
+    return ownerAccess;
   }
 
   function forceOperatorRole(){
@@ -483,6 +537,7 @@
 
   function lockScreen(opts = {}){
     clearSessionFlag();
+    ownerAccess = false;
     setLocked(true);
     closeSignupModal({ restoreFocus: false });
     if (!opts.keepMode) {
@@ -499,6 +554,7 @@
 
     forceOperatorRole();
     closeOverlays();
+    notifyOwnerAccessChanged();
 
     focusPrimary();
     if (!opts.silent) notify("Tela bloqueada 🔒", "info");
@@ -516,6 +572,7 @@
     setInputDisabled(ui.emailInput, false);
     setMsg("Informe seu e-mail e senha.", false);
     clearAuthUrlState();
+    setTimeout(() => { refreshOwnerAccess(); }, 0);
   }
 
   function setButtonLoading(btn, loading, label){
@@ -539,6 +596,7 @@
 
   function enterRecoveryResetMode(user){
     clearSessionFlag();
+    ownerAccess = false;
     setLocked(true);
     closeSignupModal({ restoreFocus: false });
     updateBrand();
@@ -552,6 +610,7 @@
 
     forceOperatorRole();
     closeOverlays();
+    notifyOwnerAccessChanged();
     focusPrimary();
   }
 
@@ -968,6 +1027,7 @@
             return;
           }
           setUserInfo(session.user);
+          refreshOwnerAccess();
         }
       });
     } catch {}
@@ -995,5 +1055,10 @@
     isLocked,
     lockScreen,
     unlockScreen,
+    isOwner: () => !!ownerAccess,
+    getCurrentUser: () => currentUser,
+    getCurrentUserEmail: () => normalizeEmail(currentUser?.email || ""),
+    getAuthHeaders,
+    refreshOwnerAccess,
   });
 })();

@@ -477,6 +477,208 @@
       }
     }
 
+    let accessInvitesLoadPromise = null;
+    let accessInviteRowsIndex = new Map();
+
+    async function getOwnerAuthHeaders(){
+      try{
+        return await (window.MVS_ACCESS?.getAuthHeaders?.() || Promise.resolve({}));
+      } catch {
+        return {};
+      }
+    }
+
+    function setAccessInviteOwnerHint(text, isError = false){
+      if (!els.accessInviteOwnerHint) return;
+      els.accessInviteOwnerHint.textContent = String(text || "");
+      els.accessInviteOwnerHint.classList.toggle("error", !!isError);
+    }
+
+    function renderAccessInviteEmpty(text){
+      if (!els.accessInviteList) return;
+      els.accessInviteList.innerHTML = `<div class="opsEmpty">${escapeHtml(text || "Nenhum convite cadastrado.")}</div>`;
+    }
+
+    function syncOwnerInviteCardVisibility(){
+      const card = document.getElementById("ownerInviteCard");
+      const isOwner = !!window.MVS_ACCESS?.isOwner?.();
+      if (card){
+        card.style.display = isOwner ? (card.dataset.ownerDisplay || "grid") : "none";
+        card.setAttribute("aria-hidden", isOwner ? "false" : "true");
+      }
+      if (!isOwner){
+        accessInviteRowsIndex = new Map();
+        setAccessInviteOwnerHint("Acesso restrito ao proprietário.");
+        renderAccessInviteEmpty("Entre com a conta do proprietário para gerenciar convites.");
+      }
+    }
+
+    function formatAccessInviteWhen(iso){
+      if (!iso) return "—";
+      try{
+        return new Date(iso).toLocaleString("pt-BR");
+      } catch {
+        return "—";
+      }
+    }
+
+    function renderAccessInviteList(rows){
+      if (!els.accessInviteList) return;
+      const list = Array.isArray(rows) ? rows : [];
+      accessInviteRowsIndex = new Map(list.map((row) => [String(row.id), row]));
+      if (!list.length){
+        renderAccessInviteEmpty("Nenhum convite cadastrado.");
+        return;
+      }
+
+      els.accessInviteList.innerHTML = list.map((row) => {
+        const active = row?.active !== false;
+        const label = String(row?.label || "").trim();
+        const source = String(row?.source || "").trim();
+        const uses = Math.max(0, Number(row?.uses_count || 0));
+        const lastUsed = row?.last_used_at
+          ? `Último uso: ${formatAccessInviteWhen(row.last_used_at)}${row?.last_used_email ? ` • ${escapeHtml(row.last_used_email)}` : ""}`
+          : "Ainda não usado";
+        return `
+          <div class="expenseRow inviteRow">
+            <div>
+              <div class="opsTitle inviteCodeRow">
+                <span class="inviteCodeValue">${escapeHtml(String(row?.code || ""))}</span>
+                <span class="inviteBadge ${active ? "is-active" : "is-inactive"}">${active ? "Ativo" : "Bloqueado"}</span>
+              </div>
+              <div class="expenseMeta">${label ? escapeHtml(label) : "Sem descrição"}</div>
+              <div class="expenseMeta">Usos: ${escapeHtml(String(uses))} • Origem: ${escapeHtml(source || "painel")}</div>
+              <div class="expenseMeta">${lastUsed}</div>
+            </div>
+            <div class="expenseRowActions inviteRowActions">
+              <button class="miniBtn" type="button" data-invite-action="copy" data-invite-id="${escapeAttr(String(row.id))}">Copiar</button>
+              <button class="miniBtn" type="button" data-invite-action="toggle" data-invite-id="${escapeAttr(String(row.id))}">${active ? "Bloquear" : "Ativar"}</button>
+              <button class="miniBtn danger" type="button" data-invite-action="delete" data-invite-id="${escapeAttr(String(row.id))}">Excluir</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    async function loadAccessInvites(opts = {}){
+      syncOwnerInviteCardVisibility();
+      if (!els.accessInviteList || !(window.MVS_ACCESS?.isOwner?.())) return;
+      const silent = !!opts.silent;
+      if (accessInvitesLoadPromise) return accessInvitesLoadPromise;
+
+      accessInvitesLoadPromise = (async () => {
+        try{
+          if (!silent) setButtonLoading(els.accessInviteRefreshBtn, true);
+          setAccessInviteOwnerHint("Gerencie os convites de acesso sem redeploy.");
+          const headers = await getOwnerAuthHeaders();
+          const resp = await fetch("/api/access/invites", { headers });
+          const data = await resp.json().catch(() => null);
+          if (resp.status === 401 || resp.status === 403){
+            if (typeof window.MVS_ACCESS?.refreshOwnerAccess === "function"){
+              await window.MVS_ACCESS.refreshOwnerAccess();
+            }
+            syncOwnerInviteCardVisibility();
+            return;
+          }
+          if (!resp.ok || data?.ok === false) throw new Error(data?.error || "Erro ao carregar convites");
+          setAccessInviteOwnerHint(`Convites carregados para ${data?.owner_email || "o proprietário"}.`);
+          renderAccessInviteList(data?.rows || []);
+        } catch (e){
+          if (!silent){
+            setAccessInviteOwnerHint("Falha ao carregar convites.", true);
+            renderAccessInviteEmpty("Falha ao carregar convites.");
+            toast("Falha ao carregar convites: " + e.message, "error", { detail: e?.stack || e?.message });
+          }
+        } finally {
+          if (!silent) setButtonLoading(els.accessInviteRefreshBtn, false);
+        }
+      })();
+
+      try{
+        return await accessInvitesLoadPromise;
+      } finally {
+        accessInvitesLoadPromise = null;
+      }
+    }
+
+    async function createAccessInviteFromPanel(){
+      if (!(window.MVS_ACCESS?.isOwner?.())){
+        toast("Acesso restrito ao proprietário.", "error");
+        return;
+      }
+      const label = String(els.accessInviteLabelInput?.value || "").trim();
+      const code = String(els.accessInviteCodeInput?.value || "").trim();
+      try{
+        setButtonLoading(els.accessInviteCreateBtn, true, "Criando...");
+        const headers = await getOwnerAuthHeaders();
+        const resp = await fetch("/api/access/invites", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...headers,
+          },
+          body: JSON.stringify({ label, code }),
+        });
+        const data = await resp.json().catch(() => null);
+        if (!resp.ok || data?.ok === false) throw new Error(data?.error || "Erro ao criar convite");
+        if (els.accessInviteLabelInput) els.accessInviteLabelInput.value = "";
+        if (els.accessInviteCodeInput) els.accessInviteCodeInput.value = "";
+        await loadAccessInvites({ silent: true });
+        toast(`Convite criado: ${data?.row?.code || "novo código"}.`, "success");
+      } catch (e){
+        toast("Falha ao criar convite: " + e.message, "error", { detail: e?.stack || e?.message });
+      } finally {
+        setButtonLoading(els.accessInviteCreateBtn, false);
+      }
+    }
+
+    async function handleAccessInviteAction(action, row){
+      if (!row) return;
+      if (action === "copy"){
+        const code = String(row?.code || "");
+        if (!code){
+          toast("Convite sem código.", "error");
+          return;
+        }
+        try{
+          await navigator.clipboard.writeText(code);
+          toast("Código copiado.", "success");
+        } catch {
+          toast(`Código: ${code}`, "info");
+        }
+        return;
+      }
+
+      const headers = await getOwnerAuthHeaders();
+      if (action === "toggle"){
+        const resp = await fetch(`/api/access/invites/${Number(row.id)}/toggle`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...headers,
+          },
+          body: JSON.stringify({ active: !(row?.active !== false) }),
+        });
+        const data = await resp.json().catch(() => null);
+        if (!resp.ok || data?.ok === false) throw new Error(data?.error || "Erro ao atualizar convite");
+        return;
+      }
+
+      if (action === "delete"){
+        const ok = await openConfirmModal({
+          title: "Excluir convite",
+          message: "Deseja excluir este convite? Essa ação não pode ser desfeita.",
+        });
+        if (!ok) return;
+        const resp = await fetch(`/api/access/invites/${Number(row.id)}/delete`, {
+          method: "POST",
+          headers,
+        });
+        const data = await resp.json().catch(() => null);
+        if (!resp.ok || data?.ok === false) throw new Error(data?.error || "Erro ao excluir convite");
+      }
+    }
+
     function addonCategoryLabel(id){
       const key = String(id || "").trim().toLowerCase();
       if (key === "_default") return "Padrão (outras categorias)";
@@ -930,7 +1132,7 @@
       toast("Logo removida.", "success");
     }
 
-    function openSystemModal(){
+    async function openSystemModal(){
       if (!els.systemModal) return;
       closeOtherModals();
       renderLogs();
@@ -945,6 +1147,12 @@
         toast("Modo operador: recursos administrativos bloqueados.", "info");
       }
       els.systemModal.style.display = "flex";
+      syncOwnerInviteCardVisibility();
+      if (typeof window.MVS_ACCESS?.refreshOwnerAccess === "function"){
+        await window.MVS_ACCESS.refreshOwnerAccess();
+        syncOwnerInviteCardVisibility();
+      }
+      loadAccessInvites({ silent: true });
     }
 
     function openManagerLoginModal(){
@@ -1332,12 +1540,45 @@
       }
     });
     if (els.diagRefreshBtn) els.diagRefreshBtn.addEventListener("click", loadDiagnostics);
+    if (els.accessInviteRefreshBtn) els.accessInviteRefreshBtn.addEventListener("click", () => loadAccessInvites());
+    if (els.accessInviteCreateBtn) els.accessInviteCreateBtn.addEventListener("click", createAccessInviteFromPanel);
+    if (els.accessInviteCodeInput) els.accessInviteCodeInput.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      createAccessInviteFromPanel();
+    });
+    if (els.accessInviteList) els.accessInviteList.addEventListener("click", async (e) => {
+      const btn = e.target.closest("button[data-invite-action]");
+      if (!btn) return;
+      const action = String(btn.dataset.inviteAction || "");
+      const rowId = String(btn.dataset.inviteId || "");
+      const row = accessInviteRowsIndex.get(rowId);
+      if (!row) return;
+      try{
+        setButtonLoading(btn, true);
+        await handleAccessInviteAction(action, row);
+        if (action !== "copy"){
+          await loadAccessInvites({ silent: true });
+          toast(action === "delete" ? "Convite excluído." : "Convite atualizado.", "success");
+        }
+      } catch (err){
+        toast("Falha ao processar convite: " + err.message, "error", { detail: err?.stack || err?.message });
+      } finally {
+        setButtonLoading(btn, false);
+      }
+    });
     if (els.logClearBtn) els.logClearBtn.addEventListener("click", () => {
       if (!requireManager()) return;
       logs = [];
       saveLogs();
       renderLogs();
       toast("Logs limpos.", "success");
+    });
+    window.addEventListener("mvs-owner-access-changed", () => {
+      syncOwnerInviteCardVisibility();
+      if (window.MVS_ACCESS?.isOwner?.()){
+        loadAccessInvites({ silent: true });
+      }
     });
     if (els.cancelSaleBtn) els.cancelSaleBtn.addEventListener("click", () => {
       openSalesModal();

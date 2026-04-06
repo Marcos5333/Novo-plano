@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 
 function createApiHandler({ dataFile } = {}){
   const BRL_FORMATTER = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -15,6 +16,12 @@ function createApiHandler({ dataFile } = {}){
     String(process.env.MVS_ACCESS_INVITE_CODES || "")
       .split(",")
       .map((value) => normalizeInviteCode(value))
+      .filter(Boolean)
+  ));
+  const ACCESS_OWNER_EMAILS = Array.from(new Set(
+    String(process.env.MVS_ACCESS_OWNER_EMAILS || "")
+      .split(",")
+      .map((value) => normalizeAccessEmail(value))
       .filter(Boolean)
   ));
   let cachedDb = null;
@@ -40,8 +47,12 @@ function createApiHandler({ dataFile } = {}){
       .toUpperCase();
   }
 
+  function normalizeAccessEmail(value){
+    return String(value ?? "").trim().toLowerCase();
+  }
+
   function isValidAccessEmail(value){
-    const email = String(value || "").trim();
+    const email = normalizeAccessEmail(value);
     return !!email && email.includes("@");
   }
 
@@ -95,7 +106,154 @@ function createApiHandler({ dataFile } = {}){
   }
 
   function isControlledSignupConfigured(){
-    return !!SUPABASE_URL && !!SUPABASE_SERVICE_ROLE_KEY && ACCESS_INVITE_CODES.length > 0;
+    return !!SUPABASE_URL && !!SUPABASE_SERVICE_ROLE_KEY;
+  }
+
+  function isOwnerAccessConfigured(){
+    return !!SUPABASE_URL && !!SUPABASE_SERVICE_ROLE_KEY && ACCESS_OWNER_EMAILS.length > 0;
+  }
+
+  function extractBearerToken(req){
+    const raw = String(req?.headers?.authorization || "").trim();
+    const match = /^Bearer\s+(.+)$/i.exec(raw);
+    return match ? String(match[1] || "").trim() : "";
+  }
+
+  function isOwnerEmail(email){
+    const normalized = normalizeAccessEmail(email);
+    return !!normalized && ACCESS_OWNER_EMAILS.includes(normalized);
+  }
+
+  async function getSupabaseUserFromToken(accessToken){
+    const token = String(accessToken || "").trim();
+    if (!token || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+    try{
+      const resp = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        method: "GET",
+        headers: {
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!resp.ok) return null;
+      const data = await readJsonResponse(resp);
+      return data?.user || data || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function requireOwnerAccess(req, res){
+    if (!isOwnerAccessConfigured()){
+      sendError(res, "Acesso do proprietário não está configurado no servidor.", 503);
+      return null;
+    }
+    const token = extractBearerToken(req);
+    if (!token){
+      sendError(res, "Sessão inválida. Faça login novamente.", 401);
+      return null;
+    }
+    const user = await getSupabaseUserFromToken(token);
+    const email = normalizeAccessEmail(user?.email || "");
+    if (!user || !email){
+      sendError(res, "Sessão inválida. Faça login novamente.", 401);
+      return null;
+    }
+    if (!isOwnerEmail(email)){
+      sendError(res, "Acesso restrito ao proprietário.", 403);
+      return null;
+    }
+    return { ...user, email };
+  }
+
+  function createInviteId(db){
+    const nextId = Math.max(1, Number(db?.seq?.invite || 1));
+    db.seq.invite = nextId + 1;
+    return nextId;
+  }
+
+  function normalizeAccessInviteRow(row){
+    const createdAt = String(row?.created_at || nowIso());
+    const updatedAt = String(row?.updated_at || createdAt);
+    return {
+      id: Math.max(1, Number(row?.id || 0)),
+      code: normalizeInviteCode(row?.code || ""),
+      label: String(row?.label || "").trim(),
+      active: row?.active !== false,
+      uses_count: Math.max(0, Number(row?.uses_count || 0)),
+      source: String(row?.source || "panel").trim() || "panel",
+      created_by_email: normalizeAccessEmail(row?.created_by_email || ""),
+      last_used_email: normalizeAccessEmail(row?.last_used_email || ""),
+      created_at: createdAt,
+      updated_at: updatedAt,
+      last_used_at: String(row?.last_used_at || ""),
+    };
+  }
+
+  function ensureAccessInviteStore(db){
+    if (!Array.isArray(db.access_invites)){
+      db.access_invites = [];
+    }
+    const initialized = !!db?.meta?.access_invites_initialized;
+    if (initialized || db.access_invites.length > 0 || !ACCESS_INVITE_CODES.length){
+      if (db.access_invites.length > 0 && !initialized){
+        db.meta.access_invites_initialized = true;
+      }
+      return false;
+    }
+
+    const now = nowIso();
+    const seeded = ACCESS_INVITE_CODES.map((code) => normalizeAccessInviteRow({
+      id: createInviteId(db),
+      code,
+      label: "",
+      active: true,
+      uses_count: 0,
+      source: "seed",
+      created_by_email: "",
+      last_used_email: "",
+      created_at: now,
+      updated_at: now,
+      last_used_at: "",
+    })).filter((row) => row.code);
+
+    if (seeded.length){
+      db.access_invites.push(...seeded);
+      db.meta.access_invites_initialized = true;
+      return true;
+    }
+
+    return false;
+  }
+
+  function getAccessInviteRows(db){
+    if (!Array.isArray(db.access_invites)) return [];
+    return db.access_invites
+      .map((row) => normalizeAccessInviteRow(row))
+      .filter((row) => !!row.code);
+  }
+
+  function findAccessInviteByCode(db, code){
+    const normalizedCode = normalizeInviteCode(code);
+    if (!normalizedCode) return null;
+    return getAccessInviteRows(db).find((row) => row.active && row.code === normalizedCode) || null;
+  }
+
+  function findAccessInviteIndexById(db, id){
+    const target = Number(id || 0);
+    return Array.isArray(db.access_invites)
+      ? db.access_invites.findIndex((row) => Number(row?.id || 0) === target)
+      : -1;
+  }
+
+  function generateAccessInviteCode(db){
+    const existing = new Set(getAccessInviteRows(db).map((row) => row.code));
+    for (let attempt = 0; attempt < 20; attempt += 1){
+      const suffix = crypto.randomBytes(4).toString("hex").toUpperCase();
+      const code = `CONVITE-${suffix}`;
+      if (!existing.has(code)) return code;
+    }
+    return `CONVITE-${Date.now().toString(36).toUpperCase()}`;
   }
 
   async function upsertSupabaseProfile(user){
@@ -232,7 +390,7 @@ function createApiHandler({ dataFile } = {}){
   function createBaseDb(){
     return {
       version: 1,
-      seq: { order: 1, item: 1, movement: 1 },
+      seq: { order: 1, item: 1, movement: 1, invite: 1 },
       meta: {
         last_order_number: 0,
         cash_status: "FECHADO",
@@ -242,11 +400,13 @@ function createApiHandler({ dataFile } = {}){
         cash_last_closed_at: "",
         last_backup_at: "",
         last_backup_path: "",
+        access_invites_initialized: false,
       },
       orders: [],
       order_items: [],
       cash_movements: [],
       cash_closings: [],
+      access_invites: [],
     };
   }
 
@@ -265,6 +425,7 @@ function createApiHandler({ dataFile } = {}){
         order: Math.max(1, Number(source?.seq?.order || base.seq.order)),
         item: Math.max(1, Number(source?.seq?.item || base.seq.item)),
         movement: Math.max(1, Number(source?.seq?.movement || base.seq.movement)),
+        invite: Math.max(1, Number(source?.seq?.invite || base.seq.invite)),
       },
       meta: {
         last_order_number: Math.max(0, Number(source?.meta?.last_order_number || 0)),
@@ -275,6 +436,7 @@ function createApiHandler({ dataFile } = {}){
         cash_last_closed_at: String(source?.meta?.cash_last_closed_at || ""),
         last_backup_at: String(source?.meta?.last_backup_at || ""),
         last_backup_path: String(source?.meta?.last_backup_path || ""),
+        access_invites_initialized: !!source?.meta?.access_invites_initialized,
       },
       orders: Array.isArray(source?.orders) ? source.orders : [],
       order_items: Array.isArray(source?.order_items) ? source.order_items : [],
@@ -307,14 +469,19 @@ function createApiHandler({ dataFile } = {}){
             created_at: String(row?.created_at || nowIso()),
           }))
         : [],
+      access_invites: Array.isArray(source?.access_invites)
+        ? source.access_invites.map((row) => normalizeAccessInviteRow(row)).filter((row) => !!row.code)
+        : [],
     };
 
     const maxOrderId = normalized.orders.reduce((acc, row) => Math.max(acc, Number(row?.id || 0)), 0);
     const maxItemId = normalized.order_items.reduce((acc, row) => Math.max(acc, Number(row?.id || 0)), 0);
     const maxMovementId = normalized.cash_movements.reduce((acc, row) => Math.max(acc, Number(row?.id || 0)), 0);
+    const maxInviteId = normalized.access_invites.reduce((acc, row) => Math.max(acc, Number(row?.id || 0)), 0);
     normalized.seq.order = Math.max(normalized.seq.order, maxOrderId + 1);
     normalized.seq.item = Math.max(normalized.seq.item, maxItemId + 1);
     normalized.seq.movement = Math.max(normalized.seq.movement, maxMovementId + 1);
+    normalized.seq.invite = Math.max(normalized.seq.invite, maxInviteId + 1);
     return normalized;
   }
 
@@ -1105,6 +1272,129 @@ ${bodyHtml}
     const method = String(req.method || "GET").toUpperCase();
     const pathName = urlObj.pathname;
     const db = loadDb();
+    const seededInvites = ensureAccessInviteStore(db);
+    if (seededInvites){
+      saveDb(db, { immediate: true });
+    }
+
+    if (method === "GET" && pathName === "/api/access/owner-status"){
+      const token = extractBearerToken(req);
+      if (!token){
+        sendJson(res, 200, {
+          ok: true,
+          owner: false,
+          configured: isOwnerAccessConfigured(),
+          email: "",
+        });
+        return;
+      }
+      const user = await getSupabaseUserFromToken(token);
+      const email = normalizeAccessEmail(user?.email || "");
+      sendJson(res, 200, {
+        ok: true,
+        owner: isOwnerEmail(email),
+        configured: isOwnerAccessConfigured(),
+        email,
+      });
+      return;
+    }
+
+    if (method === "GET" && pathName === "/api/access/invites"){
+      const owner = await requireOwnerAccess(req, res);
+      if (!owner) return;
+
+      const rows = getAccessInviteRows(db)
+        .sort((a, b) => {
+          if (Number(b.active) !== Number(a.active)) return Number(b.active) - Number(a.active);
+          const ta = new Date(String(a.updated_at || a.created_at || "")).getTime();
+          const tb = new Date(String(b.updated_at || b.created_at || "")).getTime();
+          if (Number.isFinite(ta) && Number.isFinite(tb) && tb !== ta) return tb - ta;
+          return Number(b.id || 0) - Number(a.id || 0);
+        });
+
+      sendJson(res, 200, {
+        ok: true,
+        owner_email: owner.email,
+        rows,
+      });
+      return;
+    }
+
+    if (method === "POST" && pathName === "/api/access/invites"){
+      const owner = await requireOwnerAccess(req, res);
+      if (!owner) return;
+
+      const payload = parseJsonBody(await readRawBody(req));
+      const label = String(payload?.label || "").trim();
+      const requestedCode = normalizeInviteCode(payload?.code || "");
+      const code = requestedCode || generateAccessInviteCode(db);
+      const exists = getAccessInviteRows(db).some((row) => row.code === code);
+      if (exists){
+        sendError(res, "Já existe um convite com esse código.", 409);
+        return;
+      }
+
+      const now = nowIso();
+      const row = normalizeAccessInviteRow({
+        id: createInviteId(db),
+        code,
+        label,
+        active: payload?.active !== false,
+        uses_count: 0,
+        source: "panel",
+        created_by_email: owner.email,
+        last_used_email: "",
+        created_at: now,
+        updated_at: now,
+        last_used_at: "",
+      });
+
+      db.access_invites.push(row);
+      db.meta.access_invites_initialized = true;
+      saveDb(db);
+      sendJson(res, 200, { ok: true, row });
+      return;
+    }
+
+    const inviteToggleMatch = pathName.match(/^\/api\/access\/invites\/(\d+)\/toggle$/);
+    if (method === "POST" && inviteToggleMatch){
+      const owner = await requireOwnerAccess(req, res);
+      if (!owner) return;
+      const inviteId = Number(inviteToggleMatch[1]);
+      const inviteIndex = findAccessInviteIndexById(db, inviteId);
+      if (inviteIndex < 0){
+        sendError(res, "Convite não encontrado.", 404);
+        return;
+      }
+      const payload = parseJsonBody(await readRawBody(req));
+      const current = normalizeAccessInviteRow(db.access_invites[inviteIndex]);
+      current.active = Object.prototype.hasOwnProperty.call(payload || {}, "active")
+        ? !!payload.active
+        : !current.active;
+      current.updated_at = nowIso();
+      db.access_invites[inviteIndex] = current;
+      db.meta.access_invites_initialized = true;
+      saveDb(db);
+      sendJson(res, 200, { ok: true, row: current });
+      return;
+    }
+
+    const inviteDeleteMatch = pathName.match(/^\/api\/access\/invites\/(\d+)\/delete$/);
+    if (method === "POST" && inviteDeleteMatch){
+      const owner = await requireOwnerAccess(req, res);
+      if (!owner) return;
+      const inviteId = Number(inviteDeleteMatch[1]);
+      const inviteIndex = findAccessInviteIndexById(db, inviteId);
+      if (inviteIndex < 0){
+        sendError(res, "Convite não encontrado.", 404);
+        return;
+      }
+      const [removed] = db.access_invites.splice(inviteIndex, 1);
+      db.meta.access_invites_initialized = true;
+      saveDb(db);
+      sendJson(res, 200, { ok: true, row: normalizeAccessInviteRow(removed) });
+      return;
+    }
 
     if (method === "POST" && pathName === "/api/access/signup"){
       const payload = parseJsonBody(await readRawBody(req));
@@ -1133,17 +1423,30 @@ ${bodyHtml}
         sendError(res, "Cadastro por convite não está configurado no servidor.", 503);
         return;
       }
-      if (!ACCESS_INVITE_CODES.length){
+      const accessInviteRows = getAccessInviteRows(db);
+      if (!accessInviteRows.length){
         sendError(res, "Nenhum código de convite foi configurado no servidor.", 503);
         return;
       }
-      if (!ACCESS_INVITE_CODES.includes(inviteCode)){
+      const inviteRow = findAccessInviteByCode(db, inviteCode);
+      if (!inviteRow){
         sendError(res, "Código de convite inválido.", 403);
         return;
       }
 
       try{
         const user = await createSupabaseAccessUser({ name, email, password, inviteCode });
+        const inviteIndex = findAccessInviteIndexById(db, inviteRow.id);
+        if (inviteIndex >= 0){
+          const updatedInvite = normalizeAccessInviteRow(db.access_invites[inviteIndex]);
+          updatedInvite.uses_count = Math.max(0, Number(updatedInvite.uses_count || 0)) + 1;
+          updatedInvite.last_used_at = nowIso();
+          updatedInvite.last_used_email = email;
+          updatedInvite.updated_at = updatedInvite.last_used_at;
+          db.access_invites[inviteIndex] = updatedInvite;
+          db.meta.access_invites_initialized = true;
+          saveDb(db);
+        }
         sendJson(res, 200, {
           ok: true,
           user_id: String(user?.id || ""),
@@ -2096,9 +2399,11 @@ ${bodyHtml}
         },
         access: {
           controlled_signup: isControlledSignupConfigured(),
-          invite_codes_count: ACCESS_INVITE_CODES.length,
+          invite_codes_count: getAccessInviteRows(db).length,
           supabase_url_configured: !!SUPABASE_URL,
           supabase_service_role_configured: !!SUPABASE_SERVICE_ROLE_KEY,
+          owner_access_configured: isOwnerAccessConfigured(),
+          owner_emails_count: ACCESS_OWNER_EMAILS.length,
         },
       });
       return;

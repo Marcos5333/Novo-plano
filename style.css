@@ -3291,6 +3291,54 @@
       justify-items:end;
       align-items:center;
     }
+    .inviteList{
+      display:grid;
+      gap:8px;
+      margin-top:4px;
+    }
+    .inviteRow{
+      align-items:start;
+    }
+    .inviteCodeRow{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .inviteCodeValue{
+      font-family:"Courier New", Courier, monospace;
+      font-size:13px;
+      letter-spacing:.3px;
+      word-break:break-all;
+    }
+    .inviteBadge{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-height:24px;
+      padding:0 10px;
+      border-radius:999px;
+      font-size:11px;
+      font-weight:1000;
+      letter-spacing:.3px;
+      text-transform:uppercase;
+      border:1px solid rgba(18,28,65,.12);
+      background:#eef2ff;
+      color:#1d4ed8;
+    }
+    .inviteBadge.is-active{
+      background:#eafaf1;
+      color:#138a4b;
+      border-color:rgba(19,138,75,.18);
+    }
+    .inviteBadge.is-inactive{
+      background:#fff1f2;
+      color:#be123c;
+      border-color:rgba(190,18,60,.18);
+    }
+    .inviteRowActions{
+      min-width:122px;
+    }
     .expenseMenu{
       position:relative;
     }
@@ -3343,6 +3391,10 @@
       .expenseRowActions{
         width:100%;
         justify-items:start;
+      }
+      .inviteRowActions{
+        min-width:0;
+        width:100%;
       }
     }
 
