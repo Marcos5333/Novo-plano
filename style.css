@@ -1388,6 +1388,60 @@
       #accessLoginModal .accessHero{ display:none; }
       #accessLoginModal .accessCard{ grid-column: 1; grid-row: 1; min-height:auto; }
     }
+    @media (max-width: 560px){
+      #accessLoginModal{
+        padding:12px;
+        --access-card-w:min(100%, 360px);
+      }
+      #accessLoginModal .accessLayout{
+        width:100%;
+        max-width:420px;
+        min-height:auto;
+        align-content:start;
+        gap:12px;
+      }
+      #accessLoginModal .accessCard{
+        width:100%;
+        max-width:100%;
+        margin:0 auto;
+        border-radius:18px;
+      }
+      #accessLoginModal .accessCardHead{
+        padding:16px 14px 0 14px;
+      }
+      #accessLoginModal #accessLoginTitle{
+        font-size:20px;
+      }
+      #accessLoginModal .accessCardSub{
+        font-size:11px;
+      }
+      #accessLoginModal .accessCardBody{
+        padding:14px;
+        gap:10px;
+        align-content:start;
+      }
+      #accessSignupModal{
+        padding:12px;
+      }
+      #accessSignupModal .accessCard{
+        width:100%;
+        max-width:100%;
+        border-radius:18px;
+      }
+      #accessSignupModal .accessCardHead{
+        padding:16px 14px 0 14px;
+      }
+      #accessSignupModal #accessSignupTitle{
+        font-size:20px;
+      }
+      #accessSignupModal .accessCardSub{
+        font-size:11px;
+      }
+      #accessSignupModal .accessCardBody{
+        padding:14px;
+        gap:10px;
+      }
+    }
     #accessLoginModal .accessHero{
       color:#e5e7eb;
     }
@@ -3137,34 +3191,58 @@
       }
       .mesaHeaderRow{
         display:grid;
-        grid-template-columns:1fr;
-        gap:10px;
-        align-items:stretch;
+        grid-template-columns:minmax(0, 1fr) auto;
+        gap:8px;
+        align-items:center;
+        padding:12px;
       }
       .mesaTrigger{
         width:100%;
-        grid-template-columns:minmax(0, 1fr) auto;
-        gap:10px;
+        grid-template-columns:auto minmax(0, 1fr) auto;
+        gap:8px;
+        align-items:center;
       }
       .mesaTriggerId{
+        display:flex;
+        align-items:center;
+        gap:6px;
         min-width:0;
       }
+      .mesaTriggerId span{
+        display:none;
+      }
       .mesaTriggerId strong{
-        font-size:20px;
+        font-size:19px;
+        white-space:nowrap;
       }
       .mesaTriggerSummary{
-        gap:3px;
+        display:flex;
+        align-items:center;
+        min-width:0;
       }
       .mesaTriggerTotal{
-        font-size:16px;
+        font-size:15px;
+        white-space:nowrap;
       }
       .mesaTriggerMeta{
-        font-size:10px;
-        line-height:1.35;
+        display:none;
+      }
+      .mesaTriggerChevron{
+        width:10px;
+        height:10px;
+        margin-right:0;
       }
       .mesaQuickAction{
-        width:100%;
+        width:auto;
         margin-left:0;
+        min-width:82px;
+        min-height:36px;
+        padding:8px 12px;
+        font-size:13px;
+        border-radius:10px;
+      }
+      .mesaCard.is-expanded .mesaTriggerChevron{
+        margin-top:0;
       }
       .deliveryHead{
         gap:6px;
@@ -3208,7 +3286,7 @@
       }
       #deliveryModal .modal{
         margin:0 auto;
-        height:auto;
+        width:100%;
         max-height:none;
       }
       #opsKitchenModal .modalBody{
@@ -3228,6 +3306,7 @@
       }
       #deliveryModal .opsCard{
         min-height:0;
+        width:100%;
       }
       #opsKitchen,
       #opsKitchenHistory{
@@ -3235,7 +3314,13 @@
       }
       #deliveryList,
       #deliveryHistoryList{
+        width:100%;
+        grid-template-columns:1fr;
         align-content:start;
+      }
+      .deliveryCard{
+        width:100%;
+        box-sizing:border-box;
       }
     }
 
