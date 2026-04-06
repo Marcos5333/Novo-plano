@@ -3208,6 +3208,29 @@
     }
 
     @media (max-width: 720px){
+      #opsTablesModal{
+        align-items:flex-start;
+        justify-content:center;
+        overflow-y:auto;
+        padding-top:max(8px, env(safe-area-inset-top));
+        padding-bottom:max(8px, env(safe-area-inset-bottom));
+      }
+      #opsTablesModal .modal{
+        margin:0 auto;
+        height:min(calc(100dvh - 16px), 100%);
+        max-height:min(calc(100dvh - 16px), 100%);
+      }
+      #opsTablesModal .modalBody{
+        flex:1 1 auto;
+        min-height:0;
+        overflow-y:auto;
+        overscroll-behavior:contain;
+        -webkit-overflow-scrolling:touch;
+        scroll-padding-bottom:calc(20px + env(safe-area-inset-bottom));
+      }
+      #opsTablesModal .opsCard{
+        min-height:0;
+      }
       #opsKitchenModal{
         align-items:flex-start;
         justify-content:center;

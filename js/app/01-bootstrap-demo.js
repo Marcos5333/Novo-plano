@@ -1506,6 +1506,7 @@ ${bodyHtml}
           const rows = db.orders
             .filter((o) =>
               String(o.order_type || "") === "entrega" &&
+              String(o.status || "").toUpperCase() !== "CANCELADO" &&
               String(o.delivery_status || "PREPARO").toUpperCase() !== "FINALIZADO"
             )
             .map((o) => ({
@@ -1574,6 +1575,9 @@ ${bodyHtml}
           const id = Number(deliveryDispatchMatch[1]);
           const order = db.orders.find((o) => Number(o.id) === id);
           if (!order) return demoError("Pedido nao encontrado", 404);
+          if (String(order.order_type || "") !== "entrega") return demoError("Pedido não é do tipo entrega.", 400);
+          if (String(order.status || "").toUpperCase() === "CANCELADO") return demoError("Pedido cancelado.", 400);
+          if (String(order.delivery_status || "").toUpperCase() === "FINALIZADO") return demoError("Entrega já finalizada.", 400);
           order.delivery_status = "DESPACHADO";
           order.delivery_dispatched_at = demoNowIso();
           demoSaveDb(db);
@@ -1585,6 +1589,9 @@ ${bodyHtml}
           const id = Number(deliveryFinalizeMatch[1]);
           const order = db.orders.find((o) => Number(o.id) === id);
           if (!order) return demoError("Pedido nao encontrado", 404);
+          if (String(order.order_type || "") !== "entrega") return demoError("Pedido não é do tipo entrega.", 400);
+          if (String(order.status || "").toUpperCase() === "CANCELADO") return demoError("Pedido cancelado.", 400);
+          if (String(order.delivery_status || "").toUpperCase() === "FINALIZADO") return demoError("Entrega já finalizada.", 400);
           order.delivery_status = "FINALIZADO";
           order.delivery_finalized_at = demoNowIso();
           demoSaveDb(db);

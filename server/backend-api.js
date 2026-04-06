@@ -2099,7 +2099,7 @@ ${bodyHtml}
       const rows = db.orders
         .filter((order) =>
           String(order.order_type || "") === "entrega" &&
-          String(order.status || "").toUpperCase() === "ABERTO" &&
+          String(order.status || "").toUpperCase() !== "CANCELADO" &&
           String(order.delivery_status || "PREPARO").toUpperCase() !== "FINALIZADO"
         )
         .map((order) => ({
@@ -2181,6 +2181,18 @@ ${bodyHtml}
         sendError(res, "Pedido nao encontrado", 404);
         return;
       }
+      if (String(order.order_type || "") !== "entrega"){
+        sendError(res, "Pedido não é do tipo entrega.", 400);
+        return;
+      }
+      if (String(order.status || "").toUpperCase() === "CANCELADO"){
+        sendError(res, "Pedido cancelado.", 400);
+        return;
+      }
+      if (String(order.delivery_status || "").toUpperCase() === "FINALIZADO"){
+        sendError(res, "Entrega já finalizada.", 400);
+        return;
+      }
       order.delivery_status = "DESPACHADO";
       order.delivery_dispatched_at = nowIso();
       saveDb(db);
@@ -2194,6 +2206,18 @@ ${bodyHtml}
       const order = db.orders.find((row) => Number(row.id) === id);
       if (!order){
         sendError(res, "Pedido nao encontrado", 404);
+        return;
+      }
+      if (String(order.order_type || "") !== "entrega"){
+        sendError(res, "Pedido não é do tipo entrega.", 400);
+        return;
+      }
+      if (String(order.status || "").toUpperCase() === "CANCELADO"){
+        sendError(res, "Pedido cancelado.", 400);
+        return;
+      }
+      if (String(order.delivery_status || "").toUpperCase() === "FINALIZADO"){
+        sendError(res, "Entrega já finalizada.", 400);
         return;
       }
       order.delivery_status = "FINALIZADO";
