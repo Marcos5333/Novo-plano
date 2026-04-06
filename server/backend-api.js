@@ -4,6 +4,19 @@ const path = require("node:path");
 function createApiHandler({ dataFile } = {}){
   const BRL_FORMATTER = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
   const DB_FLUSH_DELAY_MS = Math.max(250, Number(process.env.MVS_DB_FLUSH_DELAY_MS || 1200));
+  const SUPABASE_URL = String(process.env.MVS_SUPABASE_URL || process.env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  const SUPABASE_SERVICE_ROLE_KEY = String(
+    process.env.MVS_SUPABASE_SERVICE_ROLE_KEY
+    || process.env.SUPABASE_SERVICE_ROLE_KEY
+    || process.env.SUPABASE_SERVICE_KEY
+    || ""
+  ).trim();
+  const ACCESS_INVITE_CODES = Array.from(new Set(
+    String(process.env.MVS_ACCESS_INVITE_CODES || "")
+      .split(",")
+      .map((value) => normalizeInviteCode(value))
+      .filter(Boolean)
+  ));
   let cachedDb = null;
   let dbLoaded = false;
   let flushTimer = null;
@@ -18,6 +31,124 @@ function createApiHandler({ dataFile } = {}){
 
   function roundMoney(value){
     return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+  }
+
+  function normalizeInviteCode(value){
+    return String(value ?? "")
+      .trim()
+      .replace(/\s+/g, "")
+      .toUpperCase();
+  }
+
+  function isValidAccessEmail(value){
+    const email = String(value || "").trim();
+    return !!email && email.includes("@");
+  }
+
+  function passwordMeetsRules(password){
+    const value = String(password || "");
+    return value.length >= 6
+      && /[a-z]/.test(value)
+      && /[A-Z]/.test(value)
+      && /\d/.test(value);
+  }
+
+  async function readJsonResponse(resp){
+    try{
+      return await resp.json();
+    } catch {
+      return null;
+    }
+  }
+
+  function makeStatusError(message, statusCode = 400){
+    const err = new Error(String(message || "Erro"));
+    err.statusCode = statusCode;
+    return err;
+  }
+
+  function formatSupabaseAdminError(data){
+    const raw = String(
+      data?.msg
+      || data?.message
+      || data?.error_description
+      || data?.error?.message
+      || data?.error
+      || ""
+    ).trim();
+    const lowered = raw.toLowerCase();
+    if (
+      lowered.includes("already registered")
+      || lowered.includes("user already registered")
+      || lowered.includes("email_exists")
+      || lowered.includes("has already been registered")
+    ){
+      return makeStatusError("Já existe uma conta com esse email.", 409);
+    }
+    if (
+      lowered.includes("password should contain")
+      || lowered.includes("weak password")
+    ){
+      return makeStatusError("A senha precisa ter pelo menos 6 caracteres, com letra maiúscula, letra minúscula e número.", 400);
+    }
+    return makeStatusError(raw || "Falha ao criar conta no Supabase.", 400);
+  }
+
+  function isControlledSignupConfigured(){
+    return !!SUPABASE_URL && !!SUPABASE_SERVICE_ROLE_KEY && ACCESS_INVITE_CODES.length > 0;
+  }
+
+  async function upsertSupabaseProfile(user){
+    if (!user?.id || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return;
+    try{
+      await fetch(`${SUPABASE_URL}/rest/v1/profiles?on_conflict=id`, {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates,return=minimal",
+        },
+        body: JSON.stringify({
+          id: String(user.id),
+          email: String(user.email || "").trim() || null,
+          updated_at: nowIso(),
+        }),
+      });
+    } catch {}
+  }
+
+  async function createSupabaseAccessUser({ name, email, password, inviteCode } = {}){
+    if (!isControlledSignupConfigured()){
+      throw makeStatusError("Cadastro por convite não está configurado no servidor.", 503);
+    }
+    const resp = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: {
+          app: "mfas_pdv",
+          full_name: name,
+          name,
+          invite_code: inviteCode,
+          signup_source: "server_invite",
+        },
+      }),
+    });
+    const data = await readJsonResponse(resp);
+    if (!resp.ok){
+      throw formatSupabaseAdminError(data);
+    }
+    const user = data?.user || data || null;
+    await upsertSupabaseProfile(user);
+    return user;
   }
 
   function escapeHtml(value){
@@ -974,6 +1105,48 @@ ${bodyHtml}
     const method = String(req.method || "GET").toUpperCase();
     const pathName = urlObj.pathname;
     const db = loadDb();
+
+    if (method === "POST" && pathName === "/api/access/signup"){
+      const payload = parseJsonBody(await readRawBody(req));
+      const name = String(payload?.name || "").trim().replace(/\s+/g, " ");
+      const email = String(payload?.email || "").trim().toLowerCase();
+      const password = String(payload?.password || "");
+      const inviteCode = normalizeInviteCode(payload?.invite_code || payload?.inviteCode || "");
+
+      if (!name || name.length < 2){
+        sendError(res, "Informe seu nome.", 400);
+        return;
+      }
+      if (!isValidAccessEmail(email)){
+        sendError(res, "Informe um email válido.", 400);
+        return;
+      }
+      if (!inviteCode){
+        sendError(res, "Informe o código de convite.", 400);
+        return;
+      }
+      if (!passwordMeetsRules(password)){
+        sendError(res, "A senha precisa ter pelo menos 6 caracteres, com letra maiúscula, letra minúscula e número.", 400);
+        return;
+      }
+      if (!ACCESS_INVITE_CODES.includes(inviteCode)){
+        sendError(res, "Código de convite inválido.", 403);
+        return;
+      }
+
+      try{
+        const user = await createSupabaseAccessUser({ name, email, password, inviteCode });
+        sendJson(res, 200, {
+          ok: true,
+          user_id: String(user?.id || ""),
+          email: String(user?.email || email),
+          auto_confirmed: true,
+        });
+      } catch (err){
+        sendError(res, err?.message || "Não foi possível criar a conta.", err?.statusCode || 500);
+      }
+      return;
+    }
 
     const orderPrintMatch = pathName.match(/^\/api\/orders\/(\d+)\/print$/);
     if (method === "GET" && orderPrintMatch){

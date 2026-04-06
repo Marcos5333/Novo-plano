@@ -37,6 +37,7 @@
     signupMsg: document.getElementById("accessSignupMsg"),
     signupNameInput: document.getElementById("accessSignupNameInput"),
     signupEmailInput: document.getElementById("accessSignupEmailInput"),
+    signupInviteCodeInput: document.getElementById("accessSignupInviteCodeInput"),
     signupPasswordInput: document.getElementById("accessSignupPasswordInput"),
     signupPasswordConfirmInput: document.getElementById("accessSignupPasswordConfirmInput"),
     signupSubmitBtn: document.getElementById("accessSignupSubmitBtn"),
@@ -79,6 +80,13 @@
 
   function normalizeText(value){
     return String(value ?? "").trim();
+  }
+
+  function normalizeInviteCode(value){
+    return String(value ?? "")
+      .trim()
+      .replace(/\s+/g, "")
+      .toUpperCase();
   }
 
   function isLocked(){
@@ -137,6 +145,7 @@
     const candidates = [
       ui.signupNameInput,
       ui.signupEmailInput,
+      ui.signupInviteCodeInput,
       ui.signupPasswordInput,
       ui.signupPasswordConfirmInput,
     ];
@@ -364,15 +373,28 @@
       ui.hint.textContent = "Defina a nova senha para concluir a recuperação da conta.";
       return;
     }
-    ui.hint.textContent = "Ao criar conta você concorda com os termos de uso.";
+    ui.hint.textContent = "Ao criar conta você precisa de um código de convite válido.";
+  }
+
+  function getSignupDefaultMessage(){
+    return "Preencha seus dados e o código de convite para criar sua conta.";
+  }
+
+  function validateInviteCode(value){
+    const normalized = normalizeInviteCode(value);
+    if (!normalized){
+      return { ok: false, message: "Informe o código de convite." };
+    }
+    return { ok: true, normalized };
   }
 
   function resetSignupForm(prefillEmail = ""){
     if (ui.signupNameInput) ui.signupNameInput.value = "";
     if (ui.signupEmailInput) ui.signupEmailInput.value = normalizeText(prefillEmail || "");
+    if (ui.signupInviteCodeInput) ui.signupInviteCodeInput.value = "";
     if (ui.signupPasswordInput) ui.signupPasswordInput.value = "";
     if (ui.signupPasswordConfirmInput) ui.signupPasswordConfirmInput.value = "";
-    setSignupMsg("Preencha seus dados para criar sua conta.", false);
+    setSignupMsg(getSignupDefaultMessage(), false);
   }
 
   function openSignupModal(){
@@ -642,8 +664,10 @@
 
     const name = normalizeText(ui.signupNameInput?.value || "");
     const email = normalizeText(ui.signupEmailInput?.value || "");
+    const inviteCode = String(ui.signupInviteCodeInput?.value || "");
     const password = String(ui.signupPasswordInput?.value || "");
     const confirmPassword = String(ui.signupPasswordConfirmInput?.value || "");
+    const inviteValidation = validateInviteCode(inviteCode);
 
     if (!name || name.length < 2){
       setSignupMsg("Informe seu nome.", true);
@@ -655,6 +679,12 @@
       setSignupMsg("Email inválido.", true);
       ui.signupEmailInput?.focus();
       ui.signupEmailInput?.select?.();
+      return;
+    }
+    if (!inviteValidation.ok){
+      setSignupMsg(inviteValidation.message || "Código de convite inválido.", true);
+      ui.signupInviteCodeInput?.focus();
+      ui.signupInviteCodeInput?.select?.();
       return;
     }
     if (!passwordMeetsRules(password)){
@@ -675,39 +705,41 @@
     setSignupMsg("Criando conta...", false);
 
     try{
-      const { data, error } = await client.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            app: "mfas_pdv",
-            full_name: name,
-            name,
-          },
-        },
+      const resp = await fetch("/api/access/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          invite_code: inviteValidation.normalized,
+        }),
       });
-      if (error) throw error;
+      const result = await resp.json().catch(() => null);
+      if (!resp.ok || result?.ok === false){
+        throw new Error(result?.error || "Não foi possível criar a conta.");
+      }
 
-      await upsertProfile(client, data?.user);
-
-      if (data?.session){
-        unlockScreen(data?.user || data?.session?.user || null);
+      const { data: signInData, error: signInError } = await client.auth.signInWithPassword({ email, password });
+      if (!signInError && (signInData?.user || signInData?.session?.user)){
+        await upsertProfile(client, signInData?.user || signInData?.session?.user);
+        unlockScreen(signInData?.user || signInData?.session?.user || null);
         notify("Conta criada ✅", "success");
         return;
       }
 
       if (ui.emailInput) ui.emailInput.value = email;
-      setUserInfo(data?.user || null);
       clearSessionFlag();
       closeSignupModal({ restoreFocus: false });
       lockScreen({
         silent: true,
         keepEmail: true,
-        message: "Conta criada. Confirme seu email e depois faça login.",
+        message: "Conta criada. Faça login para continuar.",
       });
-      notify("Conta criada. Verifique seu email.", "info");
+      notify("Conta criada ✅", "success");
     } catch (e){
-      setSignupMsg(formatAuthError(e, "signup"), true);
+      const directMessage = normalizeText(e?.message || "");
+      setSignupMsg(directMessage || formatAuthError(e, "signup"), true);
     } finally {
       setButtonLoading(ui.signupSubmitBtn, false);
       setButtonLoading(ui.signupCancelBtn, false);
@@ -870,6 +902,11 @@
     ui.signupEmailInput?.focus();
   });
   if (ui.signupEmailInput) ui.signupEmailInput.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    ui.signupInviteCodeInput?.focus();
+  });
+  if (ui.signupInviteCodeInput) ui.signupInviteCodeInput.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
     e.preventDefault();
     ui.signupPasswordInput?.focus();

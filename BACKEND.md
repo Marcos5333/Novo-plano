@@ -99,6 +99,34 @@ MVS_REDIRECT_HOSTS=mvspdv.com.br
 
 Assim, qualquer acesso ao domínio raiz que chegar no backend será redirecionado com `308` para o `www`, preservando rota e parâmetros da URL.
 
+### Cadastro por convite com Supabase
+
+Se quiser que o cadastro de usuários seja controlado pelo backend:
+
+```text
+MVS_SUPABASE_URL=https://SEU-PROJETO.supabase.co
+MVS_SUPABASE_SERVICE_ROLE_KEY=sua_service_role_key
+MVS_ACCESS_INVITE_CODES=CODIGO1,CODIGO2,CODIGO3
+```
+
+Com isso:
+
+- o frontend envia o cadastro para `/api/access/signup`
+- o backend valida o código de convite
+- a conta é criada no Supabase com a `service_role`
+- o usuário deixa de depender do signup público
+
+Importante:
+
+- a `service_role` deve ficar só na Railway/backend
+- nunca coloque a `service_role` no frontend
+- os códigos de convite agora ficam só no servidor
+
+No Supabase, depois de configurar isso, desative o cadastro público em:
+
+- `Authentication` -> `General configuration`
+- desligue `Allow new users to sign up`
+
 ### Migração dos dados atuais
 
 1. Abra o sistema antigo.
