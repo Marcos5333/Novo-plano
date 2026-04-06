@@ -2864,47 +2864,6 @@
       font-size:11px;
       color:#64748b;
     }
-    @media (max-width: 720px){
-      #opsTablesModal .modal,
-      #opsKitchenModal .modal,
-      #deliveryModal .modal,
-      #receivableModal .modal{
-        width:100%;
-        border-radius:22px;
-      }
-      #opsTablesModal .modalHeader,
-      #opsKitchenModal .modalHeader,
-      #deliveryModal .modalHeader,
-      #receivableModal .modalHeader{
-        padding:14px 14px 12px;
-      }
-      #opsTablesModal .modalBody,
-      #opsKitchenModal .modalBody,
-      #deliveryModal .modalBody,
-      #receivableModal .modalBody{
-        padding:14px;
-      }
-      .receivableToolbar .btn{
-        width:100%;
-        justify-content:center;
-      }
-      .receivableTrigger{
-        grid-template-columns:1fr auto;
-        gap:10px;
-      }
-      .receivableTriggerSide{
-        min-width:0;
-      }
-      .receivableTriggerChevron{
-        display:none;
-      }
-      .receivableActions{
-        grid-template-columns:1fr;
-      }
-      .receivableName{
-        font-size:17px;
-      }
-    }
     .kitchenCard{
       display:grid;
       align-content:start;
@@ -3115,6 +3074,26 @@
       #receivableModal .opsCard{
         padding:12px;
         border-radius:16px;
+      }
+      .receivableToolbar .btn{
+        width:100%;
+        justify-content:center;
+      }
+      .receivableTrigger{
+        grid-template-columns:1fr auto;
+        gap:10px;
+      }
+      .receivableTriggerSide{
+        min-width:0;
+      }
+      .receivableTriggerChevron{
+        display:none;
+      }
+      .receivableActions{
+        grid-template-columns:1fr;
+      }
+      .receivableName{
+        font-size:17px;
       }
       .deliveryCard,
       .kitchenCard,
