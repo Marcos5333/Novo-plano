@@ -1129,6 +1129,14 @@ ${bodyHtml}
         sendError(res, "A senha precisa ter pelo menos 6 caracteres, com letra maiúscula, letra minúscula e número.", 400);
         return;
       }
+      if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY){
+        sendError(res, "Cadastro por convite não está configurado no servidor.", 503);
+        return;
+      }
+      if (!ACCESS_INVITE_CODES.length){
+        sendError(res, "Nenhum código de convite foi configurado no servidor.", 503);
+        return;
+      }
       if (!ACCESS_INVITE_CODES.includes(inviteCode)){
         sendError(res, "Código de convite inválido.", 403);
         return;
@@ -2085,6 +2093,12 @@ ${bodyHtml}
           cash_status: db.meta.cash_status,
           last_backup_at: db.meta.last_backup_at,
           last_backup_path: db.meta.last_backup_path,
+        },
+        access: {
+          controlled_signup: isControlledSignupConfigured(),
+          invite_codes_count: ACCESS_INVITE_CODES.length,
+          supabase_url_configured: !!SUPABASE_URL,
+          supabase_service_role_configured: !!SUPABASE_SERVICE_ROLE_KEY,
         },
       });
       return;
