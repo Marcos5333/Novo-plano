@@ -6,6 +6,13 @@ const { createApiHandler } = require("./backend-api");
 const ROOT_DIR = path.resolve(__dirname, "..");
 const PORT = Number(process.env.PORT || 8787);
 const RAILWAY_VOLUME_PATH = String(process.env.RAILWAY_VOLUME_MOUNT_PATH || "").trim();
+const CANONICAL_HOST = String(process.env.MVS_CANONICAL_HOST || "").trim().toLowerCase();
+const REDIRECT_HOSTS = new Set(
+  String(process.env.MVS_REDIRECT_HOSTS || "")
+    .split(",")
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean)
+);
 const DATA_FILE = process.env.MVS_DATA_FILE
   || (RAILWAY_VOLUME_PATH ? path.join(RAILWAY_VOLUME_PATH, "app-db.json") : path.join(ROOT_DIR, "data", "app-db.json"));
 
@@ -31,6 +38,32 @@ function sendText(res, statusCode, text, contentType = "text/plain; charset=utf-
     "Cache-Control": "no-store",
   });
   res.end(String(text || ""));
+}
+
+function normalizeHost(hostValue){
+  return String(hostValue || "")
+    .trim()
+    .toLowerCase()
+    .replace(/:\d+$/, "")
+    .replace(/\.$/, "");
+}
+
+function getRequestProto(req){
+  const forwarded = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+  return forwarded || "https";
+}
+
+function maybeRedirectCanonicalHost(req, res, urlObj){
+  if (!CANONICAL_HOST || REDIRECT_HOSTS.size === 0) return false;
+  const host = normalizeHost(req.headers.host || "");
+  if (!host || host === CANONICAL_HOST || !REDIRECT_HOSTS.has(host)) return false;
+  const destination = `${getRequestProto(req)}://${CANONICAL_HOST}${urlObj.pathname}${urlObj.search}`;
+  res.writeHead(308, {
+    Location: destination,
+    "Cache-Control": "public, max-age=300",
+  });
+  res.end();
+  return true;
 }
 
 function serveRuntimeConfig(res){
@@ -59,7 +92,7 @@ function resolveStaticPath(urlPath){
   return absolutePath;
 }
 
-function serveStatic(res, urlObj){
+function serveStatic(req, res, urlObj){
   const filePath = resolveStaticPath(urlObj.pathname);
   if (!filePath){
     sendText(res, 403, "Acesso negado.");
@@ -76,13 +109,32 @@ function serveStatic(res, urlObj){
     }
   }
 
+  const stat = fs.statSync(finalPath);
   const ext = path.extname(finalPath).toLowerCase();
   const contentType = MIME_TYPES[ext] || "application/octet-stream";
+  const isHtml = ext === ".html";
+  const cacheControl = isHtml
+    ? "no-store"
+    : "public, max-age=300, stale-while-revalidate=600";
+  const lastModified = stat.mtime.toUTCString();
+  const ifModifiedSince = String(req.headers["if-modified-since"] || "").trim();
+  if (ifModifiedSince){
+    const since = new Date(ifModifiedSince).getTime();
+    if (Number.isFinite(since) && Math.floor(stat.mtimeMs / 1000) <= Math.floor(since / 1000)){
+      res.writeHead(304, {
+        "Cache-Control": cacheControl,
+        "Last-Modified": lastModified,
+      });
+      res.end();
+      return;
+    }
+  }
   const stream = fs.createReadStream(finalPath);
   stream.on("error", () => sendText(res, 500, "Falha ao ler arquivo."));
   res.writeHead(200, {
     "Content-Type": contentType,
-    "Cache-Control": "no-store",
+    "Cache-Control": cacheControl,
+    "Last-Modified": lastModified,
   });
   stream.pipe(res);
 }
@@ -90,6 +142,10 @@ function serveStatic(res, urlObj){
 const server = http.createServer(async (req, res) => {
   const host = req.headers.host || `localhost:${PORT}`;
   const urlObj = new URL(req.url || "/", `http://${host}`);
+
+  if (maybeRedirectCanonicalHost(req, res, urlObj)){
+    return;
+  }
 
   if (urlObj.pathname === "/runtime-config.js"){
     serveRuntimeConfig(res);
@@ -106,7 +162,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  serveStatic(res, urlObj);
+  serveStatic(req, res, urlObj);
 });
 
 server.listen(PORT, () => {

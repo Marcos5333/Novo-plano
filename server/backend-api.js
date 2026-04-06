@@ -7,6 +7,10 @@ function createApiHandler({ dataFile } = {}){
   let cachedDb = null;
   let dbLoaded = false;
   let flushTimer = null;
+  let dbRevision = 0;
+  let cachedIndex = null;
+  let indexedDbRef = null;
+  let indexedRevision = -1;
 
   function brl(value){
     return BRL_FORMATTER.format(Number(value || 0));
@@ -183,6 +187,77 @@ function createApiHandler({ dataFile } = {}){
     return normalized;
   }
 
+  function markDbChanged(){
+    dbRevision += 1;
+    indexedDbRef = null;
+    cachedIndex = null;
+    indexedRevision = -1;
+  }
+
+  function buildDbIndex(db){
+    const orderById = new Map();
+    const itemsByOrder = new Map();
+    const itemSubtotalsByOrder = new Map();
+    const summaryMapsByOrder = new Map();
+
+    for (const order of Array.isArray(db?.orders) ? db.orders : []){
+      orderById.set(Number(order?.id || 0), order);
+    }
+
+    for (const item of Array.isArray(db?.order_items) ? db.order_items : []){
+      const orderId = Number(item?.order_id || 0);
+      const qty = Number(item?.qty || 0);
+      const unitPrice = Number(item?.unit_price || 0);
+      const notes = String(item?.notes || "");
+      const name = String(item?.name || "Item");
+
+      if (!itemsByOrder.has(orderId)) itemsByOrder.set(orderId, []);
+      itemsByOrder.get(orderId).push(item);
+
+      itemSubtotalsByOrder.set(orderId, roundMoney((itemSubtotalsByOrder.get(orderId) || 0) + (qty * unitPrice)));
+
+      let summaryMap = summaryMapsByOrder.get(orderId);
+      if (!summaryMap){
+        summaryMap = new Map();
+        summaryMapsByOrder.set(orderId, summaryMap);
+      }
+      const summaryKey = `${name}||${notes}`;
+      const current = summaryMap.get(summaryKey) || { name, qty: 0, notes };
+      current.qty += Number(item?.qty || 1);
+      summaryMap.set(summaryKey, current);
+    }
+
+    const itemsSummaryByOrder = new Map();
+    for (const [orderId, summaryMap] of summaryMapsByOrder.entries()){
+      itemsSummaryByOrder.set(orderId, Array.from(summaryMap.values()));
+    }
+
+    return {
+      orderById,
+      itemsByOrder,
+      itemSubtotalsByOrder,
+      itemsSummaryByOrder,
+    };
+  }
+
+  function getDbIndex(db){
+    if (indexedDbRef === db && indexedRevision === dbRevision && cachedIndex){
+      return cachedIndex;
+    }
+    cachedIndex = buildDbIndex(db);
+    indexedDbRef = db;
+    indexedRevision = dbRevision;
+    return cachedIndex;
+  }
+
+  function getOrderById(db, orderId){
+    return getDbIndex(db).orderById.get(Number(orderId)) || null;
+  }
+
+  function getItemsForOrder(db, orderId){
+    return getDbIndex(db).itemsByOrder.get(Number(orderId)) || [];
+  }
+
   function loadDb(){
     if (dbLoaded && cachedDb) return cachedDb;
     ensureDataDir();
@@ -191,6 +266,7 @@ function createApiHandler({ dataFile } = {}){
       fs.writeFileSync(dataFile, JSON.stringify(base, null, 2), "utf8");
       cachedDb = normalizeDb(base);
       dbLoaded = true;
+      markDbChanged();
       return cachedDb;
     }
     try{
@@ -202,6 +278,7 @@ function createApiHandler({ dataFile } = {}){
       cachedDb = normalizeDb(base);
     }
     dbLoaded = true;
+    markDbChanged();
     return cachedDb;
   }
 
@@ -211,6 +288,7 @@ function createApiHandler({ dataFile } = {}){
     fs.writeFileSync(dataFile, JSON.stringify(snapshot, null, 2), "utf8");
     cachedDb = snapshot;
     dbLoaded = true;
+    markDbChanged();
   }
 
   function scheduleDbFlush({ immediate = false } = {}){
@@ -235,8 +313,9 @@ function createApiHandler({ dataFile } = {}){
   }
 
   function saveDb(db, opts = {}){
-    cachedDb = normalizeDb(db);
+    cachedDb = opts?.normalize ? normalizeDb(db) : db;
     dbLoaded = true;
+    markDbChanged();
     scheduleDbFlush(opts);
   }
 
@@ -343,10 +422,10 @@ function createApiHandler({ dataFile } = {}){
   }
 
   function orderTotal(db, orderId){
-    const itemsTotal = db.order_items
-      .filter((row) => Number(row.order_id) === Number(orderId))
-      .reduce((acc, row) => acc + (Number(row.qty || 0) * Number(row.unit_price || 0)), 0);
-    const order = db.orders.find((row) => Number(row.id) === Number(orderId));
+    const index = getDbIndex(db);
+    const normalizedOrderId = Number(orderId);
+    const itemsTotal = Number(index.itemSubtotalsByOrder.get(normalizedOrderId) || 0);
+    const order = index.orderById.get(normalizedOrderId);
     const discount = Number(order?.discount || 0);
     const fee = Number(order?.fee || 0);
     return roundMoney(Math.max(0, itemsTotal - discount + fee));
@@ -364,7 +443,7 @@ function createApiHandler({ dataFile } = {}){
   function receivableLaunchCount(db, order){
     const rawCount = Number(order?.merged_count);
     const orderId = Number(order?.id || 0);
-    const hasItems = db.order_items.some((row) => Number(row.order_id) === orderId);
+    const hasItems = getItemsForOrder(db, orderId).length > 0;
     const mode = String(order?.launch_count_mode || "").trim().toLowerCase();
     if (mode === "launch_only"){
       return Math.max(0, Number.isFinite(rawCount) ? Math.trunc(rawCount) : 0);
@@ -435,6 +514,7 @@ function createApiHandler({ dataFile } = {}){
   function sumOrdersBetween(db, startIso, endIso){
     const start = new Date(startIso).getTime();
     const end = new Date(endIso).getTime();
+    const index = getDbIndex(db);
     const rows = db.orders
       .filter((order) => {
         const status = String(order.status || "").toUpperCase();
@@ -453,8 +533,7 @@ function createApiHandler({ dataFile } = {}){
         order_type: String(order.order_type || ""),
         table_no: String(order.table_no || ""),
         customer_name: String(order.customer_name || ""),
-        items: db.order_items
-          .filter((row) => Number(row.order_id) === Number(order.id))
+        items: (index.itemsByOrder.get(Number(order.id)) || [])
           .map((row) => ({
             name: String(row.name || "Item"),
             qty: Number(row.qty || 0),
@@ -883,15 +962,12 @@ ${bodyHtml}
   }
 
   function buildItemsSummary(db, orderId){
-    const items = db.order_items.filter((row) => Number(row.order_id) === Number(orderId));
-    const map = new Map();
-    for (const item of items){
-      const key = `${item.name}||${item.notes || ""}`;
-      const current = map.get(key) || { name: String(item.name || "Item"), qty: 0, notes: String(item.notes || "") };
-      current.qty += Number(item.qty || 1);
-      map.set(key, current);
-    }
-    return Array.from(map.values());
+    const rows = getDbIndex(db).itemsSummaryByOrder.get(Number(orderId)) || [];
+    return rows.map((row) => ({
+      name: String(row.name || "Item"),
+      qty: Number(row.qty || 0),
+      notes: String(row.notes || ""),
+    }));
   }
 
   async function handle(req, res, urlObj){
@@ -902,12 +978,12 @@ ${bodyHtml}
     const orderPrintMatch = pathName.match(/^\/api\/orders\/(\d+)\/print$/);
     if (method === "GET" && orderPrintMatch){
       const orderId = Number(orderPrintMatch[1]);
-      const order = db.orders.find((row) => Number(row.id) === orderId);
+      const order = getOrderById(db, orderId);
       if (!order){
         sendHtml(res, 404, htmlPage("Pedido nao encontrado", "<h1>Pedido nao encontrado</h1>"));
         return;
       }
-      const items = db.order_items.filter((row) => Number(row.order_id) === orderId);
+      const items = getItemsForOrder(db, orderId);
       sendHtml(res, 200, buildOrderPrintHtml(order, items));
       return;
     }
@@ -1392,7 +1468,7 @@ ${bodyHtml}
     }
 
     if (method === "GET" && pathName === "/api/kitchen/pending"){
-      const orderById = new Map(db.orders.map((order) => [Number(order.id), order]));
+      const orderById = getDbIndex(db).orderById;
       const rows = db.order_items
         .filter((item) => Number(item.is_kitchen) === 1 && (!item.status || String(item.status).toUpperCase() === "PENDENTE"))
         .map((item) => {
@@ -1422,7 +1498,7 @@ ${bodyHtml}
       const end = new Date(`${date}T23:59:59.999`);
       const startTs = start.getTime();
       const endTs = end.getTime();
-      const orderById = new Map(db.orders.map((order) => [Number(order.id), order]));
+      const orderById = getDbIndex(db).orderById;
       const rows = db.order_items
         .filter((item) => Number(item.is_kitchen) === 1 && String(item.status || "").toUpperCase() === "PRONTO")
         .map((item) => {
@@ -1584,12 +1660,12 @@ ${bodyHtml}
     const orderGetMatch = pathName.match(/^\/api\/orders\/(\d+)$/);
     if (method === "GET" && orderGetMatch){
       const id = Number(orderGetMatch[1]);
-      const order = db.orders.find((row) => Number(row.id) === id);
+      const order = getOrderById(db, id);
       if (!order){
         sendError(res, "Pedido nao encontrado", 404);
         return;
       }
-      const items = db.order_items.filter((row) => Number(row.order_id) === id);
+      const items = getItemsForOrder(db, id);
       sendJson(res, 200, { ok: true, order, items });
       return;
     }
@@ -1869,7 +1945,7 @@ ${bodyHtml}
         return;
       }
       const imported = normalizeDb(parsed);
-      saveDb(imported);
+      saveDb(imported, { normalize: false, immediate: true });
       sendJson(res, 200, { ok: true });
       return;
     }

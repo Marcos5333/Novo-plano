@@ -55,6 +55,7 @@ O projeto já está preparado para a Railway com:
 - `node server/server.js` como comando de inicialização na Railway
 - `railway.json` com healthcheck em `/health`
 - uso automático do volume da Railway quando `RAILWAY_VOLUME_MOUNT_PATH` estiver disponível
+- suporte a host canônico com redirecionamento opcional do domínio raiz para o `www`
 
 ### Passo a passo
 
@@ -82,6 +83,21 @@ Se quiser forçar outro caminho, defina:
 ```text
 MVS_DATA_FILE=/caminho/do/arquivo/app-db.json
 ```
+
+### Domínio principal (`www`) e redirecionamento do raiz
+
+Se quiser que o servidor redirecione automaticamente:
+
+- `mvspdv.com.br` -> `www.mvspdv.com.br`
+
+defina na Railway:
+
+```text
+MVS_CANONICAL_HOST=www.mvspdv.com.br
+MVS_REDIRECT_HOSTS=mvspdv.com.br
+```
+
+Assim, qualquer acesso ao domínio raiz que chegar no backend será redirecionado com `308` para o `www`, preservando rota e parâmetros da URL.
 
 ### Migração dos dados atuais
 
