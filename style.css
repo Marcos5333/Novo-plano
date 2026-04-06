@@ -3203,35 +3203,52 @@
       }
       #opsKitchenModal .modal{
         margin:0 auto;
-        height:min(calc(100dvh - 16px), 100%);
-        max-height:min(calc(100dvh - 16px), 100%);
+        height:calc(100dvh - 16px);
+        max-height:calc(100dvh - 16px);
       }
       #deliveryModal .modal{
         margin:0 auto;
-        height:min(calc(100dvh - 16px), 100%);
-        max-height:min(calc(100dvh - 16px), 100%);
+        height:calc(100dvh - 16px);
+        max-height:calc(100dvh - 16px);
       }
       #opsKitchenModal .modalBody{
+        display:flex;
+        flex-direction:column;
         flex:1 1 auto;
         min-height:0;
-        overflow-y:auto;
+        overflow-y:scroll;
         overscroll-behavior:contain;
         -webkit-overflow-scrolling:touch;
         scroll-padding-bottom:calc(20px + env(safe-area-inset-bottom));
+        scrollbar-gutter:stable;
+        touch-action:pan-y;
       }
       #deliveryModal .modalBody{
+        display:flex;
+        flex-direction:column;
         flex:1 1 auto;
         min-height:0;
-        overflow-y:auto;
+        overflow-y:scroll;
         overscroll-behavior:contain;
         -webkit-overflow-scrolling:touch;
         scroll-padding-bottom:calc(20px + env(safe-area-inset-bottom));
+        scrollbar-gutter:stable;
+        touch-action:pan-y;
       }
       #opsKitchenModal .opsCard{
         min-height:0;
       }
       #deliveryModal .opsCard{
         min-height:0;
+      }
+      #opsKitchenModal .modalBody::-webkit-scrollbar,
+      #deliveryModal .modalBody::-webkit-scrollbar{
+        width:6px;
+      }
+      #opsKitchenModal .modalBody::-webkit-scrollbar-thumb,
+      #deliveryModal .modalBody::-webkit-scrollbar-thumb{
+        background:rgba(100,116,139,.45);
+        border-radius:999px;
       }
       #opsKitchen,
       #opsKitchenHistory{
