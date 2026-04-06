@@ -210,6 +210,30 @@
     return (typeof prettyType === "function") ? prettyType(key) : key;
   }
 
+  function describeCashMovement(entry){
+    const key = String(entry?.kind || entry || "").trim().toLowerCase();
+    const reason = String(entry?.reason || "").trim();
+    const employee = String(entry?.employee_name || "").trim();
+    const baseReason = reason || "Sem motivo";
+
+    if (key === "pagamento_funcionario"){
+      const parts = ["Pagamento de funcionário"];
+      if (employee) parts.push(`Funcionário: ${employee}`);
+      if (reason && !/^pagamento\s+de\s+funcion[aá]rio\b/i.test(reason)) {
+        parts.push(reason);
+      }
+      return {
+        label: CASH_MOVEMENT_LABELS.despesa,
+        description: parts.join(" • "),
+      };
+    }
+
+    return {
+      label: cashMovementLabel(key),
+      description: employee ? `${baseReason} • Funcionário: ${employee}` : baseReason,
+    };
+  }
+
   function roundMoney(value){
     return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
   }
@@ -230,6 +254,7 @@
     parsePrice,
     paymentMethodLabel,
     cashMovementLabel,
+    describeCashMovement,
     roundMoney,
   });
 })();

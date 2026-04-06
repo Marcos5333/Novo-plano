@@ -16,16 +16,24 @@
       parsePrice,
       paymentMethodLabel,
       cashMovementLabel,
+      describeCashMovement,
       roundMoney,
     } = window.MVS_HELPERS;
 
-    // ===== Demo Storage Mode (Web/Vercel sem SQLite) =====
-    const DEMO_STORAGE_MODE = true;
+    // ===== Demo Storage Mode / Backend Runtime =====
+    const MVS_RUNTIME_CONFIG = (window.MVS_RUNTIME_CONFIG && typeof window.MVS_RUNTIME_CONFIG === "object")
+      ? window.MVS_RUNTIME_CONFIG
+      : {};
+    const DEMO_STORAGE_MODE = String(MVS_RUNTIME_CONFIG.backendMode || "demo").toLowerCase() !== "server";
     const DEMO_DB_KEY = "mvs_demo_backend_v1";
     const AUTO_BACKUP_PREFIX = "mvs_auto_backup_";
     const AUTO_BACKUP_INDEX = "mvs_auto_backup_index_v1";
     const AUTO_BACKUP_ENABLED_KEY = "mvs_auto_backup_enabled_v1";
     window.__MVS_DEMO_STORAGE = DEMO_STORAGE_MODE;
+    window.__MVS_STORAGE_LABEL = String(
+      MVS_RUNTIME_CONFIG.storageLabel ||
+      (DEMO_STORAGE_MODE ? "Base local" : "Base no servidor")
+    );
 
     if (DEMO_STORAGE_MODE) {
       installDemoStorageApiShim();
@@ -232,6 +240,28 @@
         return roundMoney(Math.max(0, itemsTotal - discount + fee));
       }
 
+      function demoOrderCreatedAt(order){
+        return String(order?.created_at || demoNowIso());
+      }
+
+      function demoOrderReportedAt(order){
+        const finalizedAt = String(order?.finalized_at || "").trim();
+        return finalizedAt || demoOrderCreatedAt(order);
+      }
+
+      function demoReceivableLaunchCount(db, order){
+        const rawCount = Number(order?.merged_count);
+        const orderId = Number(order?.id || 0);
+        const hasItems = db.order_items.some((it) => Number(it.order_id) === orderId);
+        const mode = String(order?.launch_count_mode || "").trim().toLowerCase();
+        if (mode === "launch_only"){
+          return Math.max(0, Number.isFinite(rawCount) ? Math.trunc(rawCount) : 0);
+        }
+        if (!hasItems) return 0;
+        if (!Number.isFinite(rawCount)) return 1;
+        return Math.max(1, Math.trunc(rawCount) - 1);
+      }
+
       function demoDayKeyFromIso(iso){
         const d = new Date(iso || demoNowIso());
         const yyyy = d.getFullYear();
@@ -308,7 +338,7 @@
         const rows = db.orders
           .filter((o) => {
             const status = String(o.status || "").toUpperCase();
-            const ts = new Date(o.created_at).getTime();
+            const ts = new Date(demoOrderReportedAt(o)).getTime();
             return status === "FECHADO" && Number.isFinite(ts) && ts >= start && ts <= end;
           })
           .map((o) => ({
@@ -316,7 +346,9 @@
             order_number: Number(o.order_number || 0),
             payment_method: o.payment_method || "",
             payment_splits: demoNormalizePaymentSplits(o),
-            created_at: o.created_at || demoNowIso(),
+            created_at: demoOrderCreatedAt(o),
+            reported_at: demoOrderReportedAt(o),
+            finalized_at: String(o.finalized_at || ""),
             total: demoOrderTotal(db, o.id),
             order_type: String(o.order_type || ""),
             table_no: String(o.table_no || ""),
@@ -330,7 +362,12 @@
                 notes: String(it.notes || ""),
               })),
           }))
-          .sort((a, b) => a.id - b.id);
+          .sort((a, b) => {
+            const ta = new Date(a.reported_at || a.created_at || 0).getTime();
+            const tb = new Date(b.reported_at || b.created_at || 0).getTime();
+            if (Number.isFinite(ta) && Number.isFinite(tb) && ta !== tb) return ta - tb;
+            return a.id - b.id;
+          });
 
         const byPay = { dinheiro: 0, pix: 0, debito: 0, credito: 0, pedido_pago: 0, pedido_pago_ifood: 0, outros: 0 };
         let totalGeral = 0;
@@ -479,11 +516,13 @@
     @media print{
       @page{ size: 80mm auto; margin:4mm; }
     }
+    *{box-sizing:border-box}
     body{
       font-family: "Courier New", Courier, monospace;
       margin:0 auto;
       color:#111;
-      width:72mm;
+      width:100%;
+      max-width:72mm;
       font-size:11px;
       line-height:1.25;
       word-break: normal;
@@ -491,14 +530,18 @@
     }
     h1{margin:0 0 6px 0;font-size:14px}
     .muted{opacity:.72}
-    .box{border:1px solid #ddd;border-radius:6px;padding:8px;margin:8px 0}
-    table{width:100%;border-collapse:collapse;font-size:10.5px}
-    th,td{border-bottom:1px solid #eee;padding:4px;text-align:left;vertical-align:top}
+    .box{border:1px solid #ddd;border-radius:6px;padding:8px;margin:8px 0;overflow:hidden}
+    table{width:100%;border-collapse:collapse;font-size:10.5px;table-layout:fixed}
+    th,td{border-bottom:1px solid #eee;padding:4px;text-align:left;vertical-align:top;min-width:0;word-break:break-word;overflow-wrap:anywhere}
     th:last-child,td:last-child{text-align:right}
     .hr{border-top:1px dashed #999;margin:8px 0}
     .amount,.nowrap{white-space:nowrap;word-break:keep-all;overflow-wrap:normal}
     .summaryRow{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
     .summaryRow + .summaryRow{margin-top:4px}
+    .movementTable th:nth-child(1), .movementTable td:nth-child(1){width:26%}
+    .movementTable th:nth-child(2), .movementTable td:nth-child(2){width:20%}
+    .movementTable th:nth-child(3), .movementTable td:nth-child(3){width:36%}
+    .movementTable th:nth-child(4), .movementTable td:nth-child(4){width:18%}
   </style>
 </head>
 <body>
@@ -609,20 +652,24 @@ ${bodyHtml}
         const totalSales = roundMoney(report.totalGeral || 0);
         const totalOut = roundMoney(report.totalOut || 0);
         const netRevenue = roundMoney(totalSales - totalOut);
-        const openingAmount = roundMoney(report.openingAmount || 0);
         const totalEntries = roundMoney((report.totalIn ?? report.totalGeral) || 0);
         const moneySales = roundMoney(report.moneySales || 0);
         const projectedCash = roundMoney(report.projectedCash || 0);
         const expenseTotals = report.byExpense || {};
+        const totalExpenses = roundMoney(
+          Number(expenseTotals.despesa || 0) +
+          Number(expenseTotals.pagamento_funcionario || 0)
+        );
         const showCashBreakdown = (rangeKey === "cash") || (reportMode === "detailed");
 
         const rows = orderRows.map((r) => {
           const customer = String(r.customer_name || "").trim() || "-";
+          const orderMoment = String(r.reported_at || r.created_at || "");
           return `
             <tr>
               <td>#${escapeHtml(String(r.order_number || "-"))}</td>
               <td>${escapeHtml(customer)}</td>
-              <td>${escapeHtml(new Date(r.created_at).toLocaleString("pt-BR"))}</td>
+              <td>${escapeHtml(new Date(orderMoment).toLocaleString("pt-BR"))}</td>
               <td>${escapeHtml(brl(r.total || 0))}</td>
             </tr>
           `;
@@ -633,6 +680,7 @@ ${bodyHtml}
           const customer = String(r.customer_name || "").trim() || "-";
           const tableNo = String(r.table_no || "").trim();
           const typeWithTable = (typeLabel === "MESA" && tableNo) ? `MESA ${tableNo}` : typeLabel;
+          const orderMoment = String(r.reported_at || r.created_at || "");
           const splits = Array.isArray(r.payment_splits) ? r.payment_splits : [];
           const paySummary = splits.length
             ? "DIVIDIDO"
@@ -662,7 +710,7 @@ ${bodyHtml}
             : `<div class="muted">Sem itens no pedido.</div>`;
           return `
             <div class="box">
-              <div><b>Pedido #${escapeHtml(String(r.order_number || "-"))}</b> - ${escapeHtml(new Date(r.created_at).toLocaleString("pt-BR"))}</div>
+              <div><b>Pedido #${escapeHtml(String(r.order_number || "-"))}</b> - ${escapeHtml(new Date(orderMoment).toLocaleString("pt-BR"))}</div>
               <div>Cliente: ${escapeHtml(customer)} - Origem: ${escapeHtml(typeWithTable)}</div>
               <div>Pagamento: ${escapeHtml(paySummary)} - Total: ${escapeHtml(brl(r.total || 0))}</div>
               ${splitHtml}
@@ -696,19 +744,18 @@ ${bodyHtml}
 
         const cashSection = showCashBreakdown ? `
           <div class="box">
-            <div><b>Aberturas no periodo:</b> ${escapeHtml(brl(openingAmount))}</div>
             <div><b>Entradas (todas formas):</b> ${escapeHtml(brl(totalEntries))}</div>
             <div><b>Somente dinheiro:</b> ${escapeHtml(brl(moneySales))}</div>
             <div><b>Sangria:</b> ${escapeHtml(brl(expenseTotals.sangria || 0))}</div>
-            <div><b>Despesas:</b> ${escapeHtml(brl(expenseTotals.despesa || 0))}</div>
-            <div><b>Pagamento funcionario:</b> ${escapeHtml(brl(expenseTotals.pagamento_funcionario || 0))}</div>
+            <div><b>Despesas:</b> ${escapeHtml(brl(totalExpenses))}</div>
             <div><b>Saldo esperado em caixa:</b> ${escapeHtml(brl(projectedCash))}</div>
+            <div class="muted">A abertura do caixa ja esta considerada automaticamente neste saldo.</div>
           </div>
         ` : "";
 
         const normalSection = `
           <div class="box">
-            <table>
+            <table class="reportTable">
               <thead>
                 <tr><th>Pedido</th><th>Cliente</th><th>Data/Hora</th><th>Total</th></tr>
               </thead>
@@ -730,23 +777,20 @@ ${bodyHtml}
           `;
 
         const cashMovementRows = (Array.isArray(report.movements) ? report.movements : []).map((mv) => {
-          const label = cashMovementLabel(mv.kind);
-          const reason = String(mv.reason || "").trim() || "Sem motivo";
-          const employee = String(mv.employee_name || "").trim();
-          const employeeText = employee ? `Funcionário: ${employee}` : "";
+          const movementView = describeCashMovement(mv);
           return `
             <tr>
               <td>${escapeHtml(new Date(mv.created_at).toLocaleString("pt-BR"))}</td>
-              <td>${escapeHtml(label)}</td>
-              <td>${escapeHtml(reason)}${employee ? ` • ${escapeHtml(employeeText)}` : ""}</td>
-              <td>${escapeHtml(brl(mv.amount || 0))}</td>
+              <td>${escapeHtml(movementView.label)}</td>
+              <td>${escapeHtml(movementView.description)}</td>
+              <td class="amount">${escapeHtml(brl(mv.amount || 0))}</td>
             </tr>
           `;
         }).join("");
 
         const movementTableSection = showCashBreakdown ? `
           <div class="box">
-            <table>
+            <table class="reportTable movementTable">
               <thead>
                 <tr><th>Data/Hora</th><th>Tipo</th><th>Motivo</th><th>Valor</th></tr>
               </thead>
@@ -1104,6 +1148,7 @@ ${bodyHtml}
               const typeLabel = (type === "MESA" && tableNo) ? `MESA ${tableNo}` : type;
               const customer = String(order?.customer_name || "").trim() || "-";
               const orderNo = Number(order?.order_number || 0) || "-";
+              const reportAt = String(order?.reported_at || order?.created_at || demoNowIso());
               return {
                 id: `sale-${order?.id || orderNo}`,
                 sort_id: Number(order?.id || 0),
@@ -1113,7 +1158,7 @@ ${bodyHtml}
                 amount: roundMoney(Number(order?.total || 0)),
                 reason: `Pedido #${orderNo} • ${typeLabel} • Cliente: ${customer} • Pgto: ${paymentDesc || "-"}`,
                 employee_name: "",
-                created_at: String(order?.created_at || demoNowIso()),
+                created_at: reportAt,
                 can_edit: true,
                 can_delete: true,
               };
@@ -1235,7 +1280,7 @@ ${bodyHtml}
               customer_name: String(o.customer_name || ""),
               customer_phone: String(o.customer_phone || ""),
               total: demoOrderTotal(db, o.id),
-              order_count: Number(o.merged_count || 1),
+              order_count: demoReceivableLaunchCount(db, o),
               itemsSummary: (() => {
                 const items = db.order_items.filter((it) => Number(it.order_id) === Number(o.id));
                 const map = new Map();
@@ -1277,7 +1322,7 @@ ${bodyHtml}
                 customer_name: String(existing.customer_name || ""),
                 customer_phone: String(existing.customer_phone || ""),
                 total: demoOrderTotal(db, existing.id),
-                order_count: Number(existing.merged_count || 1),
+                order_count: demoReceivableLaunchCount(db, existing),
               }
             });
           }
@@ -1291,6 +1336,7 @@ ${bodyHtml}
             id: orderId,
             order_number: orderNumber,
             created_at: now,
+            finalized_at: "",
             order_type: "a_receber",
             table_no: "",
             customer_name: customerName,
@@ -1301,7 +1347,8 @@ ${bodyHtml}
             payment_splits: [],
             delivery_status: "",
             status: "ABERTO",
-            merged_count: 1,
+            merged_count: 0,
+            launch_count_mode: "launch_only",
             subtotal: 0,
             discount: 0,
             fee: 0,
@@ -1320,7 +1367,7 @@ ${bodyHtml}
               customer_name: String(order.customer_name || ""),
               customer_phone: String(order.customer_phone || ""),
               total: 0,
-              order_count: 1,
+              order_count: 0,
             }
           });
         }
@@ -1389,25 +1436,36 @@ ${bodyHtml}
           const end = new Date(`${date}T23:59:59.999`);
           const rows = db.orders
             .filter((o) => {
-              const t = new Date(o.created_at || 0).getTime();
+              const t = new Date(demoOrderReportedAt(o)).getTime();
               return t >= start.getTime() && t <= end.getTime();
             })
-            .map((o) => ({
-              id: Number(o.id),
-              order_number: Number(o.order_number || 0),
-              created_at: o.created_at || demoNowIso(),
-              order_type: String(o.order_type || ""),
-              table_no: String(o.table_no || ""),
-              customer_name: String(o.customer_name || ""),
-              customer_phone: String(o.customer_phone || ""),
-              address: String(o.address || ""),
-              notes: String(o.notes || ""),
-              payment_method: String(o.payment_method || ""),
-              payment_splits: demoNormalizePaymentSplits(o),
-              status: String(o.status || ""),
-              total: demoOrderTotal(db, o.id)
-            }))
-            .sort((a, b) => b.id - a.id);
+            .map((o) => {
+              const createdAt = demoOrderCreatedAt(o);
+              const reportedAt = demoOrderReportedAt(o);
+              return {
+                id: Number(o.id),
+                order_number: Number(o.order_number || 0),
+                created_at: createdAt,
+                reported_at: reportedAt,
+                finalized_at: String(o.finalized_at || ""),
+                order_type: String(o.order_type || ""),
+                table_no: String(o.table_no || ""),
+                customer_name: String(o.customer_name || ""),
+                customer_phone: String(o.customer_phone || ""),
+                address: String(o.address || ""),
+                notes: String(o.notes || ""),
+                payment_method: String(o.payment_method || ""),
+                payment_splits: demoNormalizePaymentSplits(o),
+                status: String(o.status || ""),
+                total: demoOrderTotal(db, o.id)
+              };
+            })
+            .sort((a, b) => {
+              const ta = new Date(String(a.reported_at || a.created_at || "")).getTime();
+              const tb = new Date(String(b.reported_at || b.created_at || "")).getTime();
+              if (Number.isFinite(ta) && Number.isFinite(tb) && tb !== ta) return tb - ta;
+              return Number(b.id || 0) - Number(a.id || 0);
+            });
           return demoJson({ ok: true, rows });
         }
 
@@ -1560,6 +1618,7 @@ ${bodyHtml}
           order.fee = Number(payload?.totals?.fee ?? order.fee ?? 0);
           order.total = Number(payload?.totals?.total ?? demoOrderTotal(db, id));
           order.status = "FECHADO";
+          order.finalized_at = demoNowIso();
 
           demoSaveDb(db);
           return demoJson({ ok: true, order_id: id, order_number: order.order_number });
@@ -1611,7 +1670,12 @@ ${bodyHtml}
           if (existing){
             orderId = Number(existing.id);
             orderNumber = Number(existing.order_number || 0);
-            existing.merged_count = Number(existing.merged_count || 1) + 1;
+            if (orderType === "a_receber"){
+              existing.merged_count = demoReceivableLaunchCount(db, existing) + 1;
+              existing.launch_count_mode = "launch_only";
+            } else {
+              existing.merged_count = Number(existing.merged_count || 1) + 1;
+            }
             const newName = String(payload.customer_name || "").trim();
             if (newName && orderType === "a_receber"){
               existing.customer_name = newName;
@@ -1645,6 +1709,7 @@ ${bodyHtml}
               id: orderId,
               order_number: orderNumber,
               created_at: now,
+              finalized_at: orderStatus === "FECHADO" ? now : "",
               order_type: orderType,
               table_no: tableNo,
               customer_name: String(payload.customer_name || ""),
@@ -1655,6 +1720,8 @@ ${bodyHtml}
               payment_splits: demoNormalizePaymentSplits({ payment_splits: payload.payment_splits }),
               delivery_status: orderType === "entrega" ? "PREPARO" : "",
               status: orderStatus,
+              merged_count: orderType === "a_receber" ? 1 : 0,
+              launch_count_mode: orderType === "a_receber" ? "launch_only" : "",
               subtotal: Number(payload?.totals?.subtotal || 0),
               discount: Number(payload?.totals?.discount || 0),
               fee: Number(payload?.totals?.fee || 0),

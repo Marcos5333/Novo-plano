@@ -204,10 +204,12 @@
           const size = (typeof Blob !== "undefined") ? new Blob([raw]).size : raw.length;
           miniStorage.textContent = `Base local (${formatMiniBytes(size)})`;
         } else {
-          miniStorage.textContent = "Base online";
+          miniStorage.textContent = String(window.__MVS_STORAGE_LABEL || "Base no servidor");
         }
       } catch {
-        miniStorage.textContent = DEMO_STORAGE_MODE ? "Base local" : "Base online";
+        miniStorage.textContent = DEMO_STORAGE_MODE
+          ? "Base local"
+          : String(window.__MVS_STORAGE_LABEL || "Base no servidor");
       }
 
       miniOnline.textContent = navigator.onLine ? "Online" : "Offline";

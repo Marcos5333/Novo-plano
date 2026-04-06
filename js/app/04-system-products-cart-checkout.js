@@ -1140,16 +1140,22 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         const stamp = new Date().toISOString().replace(/[:.]/g,"-");
+        const backupExtension = window.__MVS_DEMO_STORAGE
+          ? "json"
+          : String(window.MVS_RUNTIME_CONFIG?.backupExtension || "json");
+        const backupFormatLabel = window.__MVS_DEMO_STORAGE
+          ? "Demo JSON"
+          : String(window.MVS_RUNTIME_CONFIG?.backupFormatLabel || "Servidor JSON");
         a.href = url;
         a.download = window.__MVS_DEMO_STORAGE
           ? `mvs_pdv_backup_demo_${stamp}.json`
-          : `mvs_pdv_backup_${stamp}.sqlite`;
+          : `mvs_pdv_backup_${stamp}.${backupExtension}`;
         document.body.appendChild(a);
         a.click();
         a.remove();
         URL.revokeObjectURL(url);
         toast("Backup exportado.", "success");
-        logEvent("info", "Backup exportado", window.__MVS_DEMO_STORAGE ? "Demo JSON" : "SQLite");
+        logEvent("info", "Backup exportado", backupFormatLabel);
         loadDiagnostics();
       } catch (e){
         toast("Falha ao exportar: " + e.message, "error", { detail: e?.stack || e?.message });
@@ -2933,7 +2939,9 @@
           const type = prettyType(r.order_type);
           const mesa = r.table_no ? `Mesa ${r.table_no}` : "-";
           const customer = r.customer_name || "-";
-          const meta = `#${r.order_number} • ${type} • ${mesa} • ${fmtDateTime(r.created_at)}`;
+          const referenceAt = String(r.reported_at || r.created_at || "");
+          const timeLabel = status === "FECHADO" ? "Fechado" : "Criado";
+          const meta = `#${r.order_number} • ${type} • ${mesa} • ${timeLabel}: ${fmtDateTime(referenceAt)}`;
           return `
             <div class="opsItem">
               <div>

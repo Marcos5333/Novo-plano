@@ -1,0 +1,12 @@
+{
+  "name": "mfas-pdv",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Backend opcional e compatível para o MFAS PDV",
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

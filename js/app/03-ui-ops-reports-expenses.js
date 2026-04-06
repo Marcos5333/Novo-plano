@@ -292,6 +292,7 @@
     let closingTableIds = null;
     let activeReceivableId = null;
     let paymentSplits = [];
+    let expandedTableKey = "";
     let launchRowsIndex = new Map();
     let expensesPoll = null;
 
@@ -340,6 +341,16 @@
         .replace(/\b\w/g, (m) => m.toUpperCase());
     }
 
+    function prettyName(value, fallback = ""){
+      const raw = String(value || "")
+        .trim()
+        .replace(/\s+/g, " ");
+      if (!raw) return fallback;
+      return raw
+        .toLocaleLowerCase("pt-BR")
+        .replace(/(^|[\s/'’-])([^\s/'’-])/g, (_, prefix, char) => `${prefix}${char.toLocaleUpperCase("pt-BR")}`);
+    }
+
     function fmtDateTime(iso){
       try{ return new Date(iso).toLocaleString("pt-BR"); }
       catch{ return "-"; }
@@ -374,7 +385,7 @@
         entry.order_ids.push(Number(r.id));
         if (r.order_number) entry.order_numbers.push(Number(r.order_number));
         entry.order_count += Number(r.order_count || 1);
-        if (r.customer_name) entry.names.add(String(r.customer_name));
+        if (r.customer_name) entry.names.add(prettyName(r.customer_name));
         if (Array.isArray(r.itemsSummary)){
           for (const it of r.itemsSummary){
             const keyItem = `${it.name}||${it.notes || ""}`;
@@ -416,12 +427,14 @@
 
     function renderOpsTables(rows){
       if (!rows || rows.length === 0){
+        expandedTableKey = "";
         els.opsTables.innerHTML = `<div class="opsEmpty">Nenhuma mesa aberta</div>`;
         return;
       }
 
       const grouped = groupOpenTables(rows);
       if (grouped.length === 0){
+        expandedTableKey = "";
         els.opsTables.innerHTML = `<div class="opsEmpty">Nenhuma mesa aberta</div>`;
         return;
       }
@@ -431,7 +444,11 @@
         const total = brl(Number(g.total || 0));
         const count = Math.max(1, Number(g.order_count || g.order_ids.length || 1));
         const pedidoTxt = count > 1 ? `${count} pedidos` : "1 pedido";
-        const ids = g.order_ids.join(",");
+        const ids = [...g.order_ids]
+          .map((value) => Number(value || 0))
+          .filter((value) => Number.isFinite(value) && value > 0)
+          .sort((a, b) => a - b)
+          .join(",");
         const names = Array.from(g.names || []);
         const namesText = names.length ? names.join(" / ") : "";
         const guestLabel = names.length > 1 ? "Responsáveis" : "Responsável";
@@ -440,6 +457,7 @@
         const itemsText = totalItems === 1 ? "1 item" : `${totalItems} itens`;
         const detailId = `ops-table-detail-${g.table_no || "mesa"}-${ids.replace(/[^0-9,]/g, "").replaceAll(",", "-")}`;
         const toggleId = `ops-items-${g.table_no || "mesa"}-${ids.replace(/[^0-9,]/g, "").replaceAll(",", "-")}`;
+        const isExpanded = expandedTableKey === ids;
         const itemsHtml = itemsList.length
           ? `<div class="opsItems mesaItemsList" id="${escapeHtml(toggleId)}">${itemsList.map(it => {
               const notes = (it.notes || "").trim();
@@ -447,9 +465,9 @@
             }).join("")}</div>`
           : `<div class="opsMeta mesaItemsEmpty">Itens indisponíveis</div>`;
         return `
-          <article class="opsItem mesaCard">
+          <article class="opsItem mesaCard${isExpanded ? " is-expanded" : ""}">
             <div class="mesaHeaderRow">
-              <button class="mesaTrigger" type="button" data-action="toggle-table-card" data-target="${escapeHtml(detailId)}" aria-expanded="false">
+              <button class="mesaTrigger" type="button" data-action="toggle-table-card" data-target="${escapeHtml(detailId)}" data-expand-key="${escapeAttr(ids)}" aria-expanded="${isExpanded ? "true" : "false"}">
                 <div class="mesaTriggerId">
                   <span>Mesa</span>
                   <strong>${escapeHtml(mesaNo)}</strong>
@@ -618,12 +636,13 @@
 
       els.receivableList.innerHTML = rows.map((r) => {
         const total = brl(Number(r.total || 0));
-        const orderCount = Math.max(1, Number(r.order_count || 1));
+        const rawOrderCount = Number(r.order_count);
+        const orderCount = Number.isFinite(rawOrderCount) ? Math.max(0, Math.trunc(rawOrderCount)) : 0;
         const itemRows = Array.isArray(r.itemsSummary) ? r.itemsSummary : [];
         const itemCount = itemRows.reduce((acc, it) => acc + Number(it.qty || 0), 0);
         const countText = itemCount === 1 ? "1 item" : `${itemCount} itens`;
-        const orderText = orderCount === 1 ? "1 lançamento" : `${orderCount} lançamentos`;
-        const customer = String(r.customer_name || "").trim() || "Cliente sem nome";
+        const orderText = orderCount === 0 ? "Sem lançamentos" : (orderCount === 1 ? "1 lançamento" : `${orderCount} lançamentos`);
+        const customer = prettyName(r.customer_name, "Cliente sem nome");
         const initials = getDisplayInitials(customer, "CL");
         const detailId = `recv-detail-${Number(r.id || 0)}`;
         const toggleId = `recv-items-${Number(r.id || 0)}`;
@@ -762,7 +781,7 @@
         els.orderType.value = "a_receber";
         els.tableNo.value = "";
         if (els.deliveryFee) els.deliveryFee.value = "";
-        els.custName.value = order.customer_name || "";
+        els.custName.value = prettyName(order.customer_name);
         els.custPhone.value = order.customer_phone || "";
         els.custAddress.value = "";
         els.orderNotes.value = "";
@@ -771,7 +790,7 @@
         updatePaymentVisibility();
         closeReceivableModal();
 
-        const customerName = String(order.customer_name || "").trim() || "cliente";
+        const customerName = prettyName(order.customer_name, "Cliente");
         toast(`Conta de ${customerName} selecionada. Adicione itens e finalize.`, "success");
       } catch (e){
         toast("Falha ao preparar conta: " + e.message, "error", { detail: e?.stack || e?.message });
@@ -841,7 +860,7 @@
             ? roundMoney(loadedFee).toFixed(2).replace(".", ",")
             : "";
         }
-        els.custName.value = baseOrder?.customer_name || "";
+        els.custName.value = prettyName(baseOrder?.customer_name);
         els.custPhone.value = baseOrder?.customer_phone || "";
         els.custAddress.value = baseOrder?.address || "";
         els.orderNotes.value = baseOrder?.notes || "";
@@ -897,6 +916,7 @@
 
     function closeOpsTablesModal(){
       if (els.opsTablesModal) els.opsTablesModal.style.display = "none";
+      expandedTableKey = "";
       if (!opsAnyOpen() && opsPoll) { clearInterval(opsPoll); opsPoll = null; }
     }
 
@@ -949,6 +969,7 @@
         const card = btn.closest(".mesaCard");
         if (!card) return;
         const expand = !card.classList.contains("is-expanded");
+        const expandKey = String(btn.dataset.expandKey || "");
         els.opsTables.querySelectorAll(".mesaCard.is-expanded").forEach((item) => {
           if (item !== card){
             item.classList.remove("is-expanded");
@@ -956,6 +977,7 @@
             if (toggle) toggle.setAttribute("aria-expanded", "false");
           }
         });
+        expandedTableKey = expand ? expandKey : "";
         card.classList.toggle("is-expanded", expand);
         btn.setAttribute("aria-expanded", expand ? "true" : "false");
         return;
@@ -1059,7 +1081,8 @@
 
       els.deliveryList.innerHTML = rows.map(r => {
         const total = brl(Number(r.total || 0));
-        const customer = r.customer_name ? `Cliente: ${escapeHtml(r.customer_name)}` : "Cliente: -";
+        const customerName = prettyName(r.customer_name);
+        const customer = customerName ? `Cliente: ${escapeHtml(customerName)}` : "Cliente: -";
         const address = r.address ? `Endereço: ${escapeHtml(r.address)}` : "Endereço: -";
         const meta = `Pedido #${r.order_number} • ${fmtDateTime(r.created_at)}`;
         const status = String(r.delivery_status || "PREPARO").toUpperCase();
@@ -1091,7 +1114,8 @@
 
       els.deliveryHistoryList.innerHTML = rows.map(r => {
         const total = brl(Number(r.total || 0));
-        const customer = r.customer_name ? `Cliente: ${escapeHtml(r.customer_name)}` : "Cliente: -";
+        const customerName = prettyName(r.customer_name);
+        const customer = customerName ? `Cliente: ${escapeHtml(customerName)}` : "Cliente: -";
         const address = r.address ? `Endereço: ${escapeHtml(r.address)}` : "Endereço: -";
         const finishedAt = r.delivery_finalized_at ? fmtDateTime(r.delivery_finalized_at) : fmtDateTime(r.created_at);
         const meta = `Pedido #${r.order_number} • Finalizado em ${finishedAt}`;
@@ -1235,11 +1259,11 @@
       if (!els.expensesSummary) return;
       const totals = data?.totals || {};
       const totalEntries = Number((data?.total_entries ?? data?.cash_sales) || 0);
+      const totalExpenses = Number(totals.despesa || 0) + Number(totals.pagamento_funcionario || 0);
       const cards = [
         { label: "Abertura", value: Number(totals.abertura || 0) },
         { label: "Sangria", value: Number(totals.sangria || 0) },
-        { label: "Despesas", value: Number(totals.despesa || 0) },
-        { label: "Pagamento funcionário", value: Number(totals.pagamento_funcionario || 0) },
+        { label: "Despesas", value: totalExpenses },
         { label: "Entradas (todas formas)", value: totalEntries },
         { label: "Saldo esperado", value: Number(data?.projected_cash || 0) },
       ];
@@ -1269,10 +1293,12 @@
       els.expensesList.innerHTML = `
         <div class="expenseList">
           ${normalizedRows.map((row) => {
-            const type = cashMovementLabel(row?.kind);
-            const reason = String(row?.reason || "").trim() || "Sem motivo";
-            const employeeName = String(row?.employee_name || "").trim();
-            const employeeInfo = employeeName ? ` • Funcionário: ${employeeName}` : "";
+            const movementView = window.MVS_HELPERS?.describeCashMovement
+              ? window.MVS_HELPERS.describeCashMovement(row)
+              : {
+                  label: cashMovementLabel(row?.kind),
+                  description: String(row?.reason || "").trim() || "Sem motivo",
+                };
             const when = fmtDateTime(row?.created_at);
             const canEdit = row?.can_edit !== false;
             const canDelete = row?.can_delete !== false;
@@ -1280,8 +1306,8 @@
             return `
               <div class="expenseRow">
                 <div>
-                  <div class="opsTitle">${escapeHtml(type)}</div>
-                  <div class="expenseMeta">${escapeHtml(when)} • ${escapeHtml(reason)}${escapeHtml(employeeInfo)}</div>
+                  <div class="opsTitle">${escapeHtml(movementView.label)}</div>
+                  <div class="expenseMeta">${escapeHtml(when)} • ${escapeHtml(movementView.description)}</div>
                 </div>
                 <div class="expenseRowActions">
                   <div class="expenseAmount">${escapeHtml(brl(Number(row?.amount || 0)))}</div>
