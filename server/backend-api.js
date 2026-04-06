@@ -3,6 +3,10 @@ const path = require("node:path");
 
 function createApiHandler({ dataFile } = {}){
   const BRL_FORMATTER = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+  const DB_FLUSH_DELAY_MS = Math.max(250, Number(process.env.MVS_DB_FLUSH_DELAY_MS || 1200));
+  let cachedDb = null;
+  let dbLoaded = false;
+  let flushTimer = null;
 
   function brl(value){
     return BRL_FORMATTER.format(Number(value || 0));
@@ -180,26 +184,80 @@ function createApiHandler({ dataFile } = {}){
   }
 
   function loadDb(){
+    if (dbLoaded && cachedDb) return cachedDb;
     ensureDataDir();
     if (!fs.existsSync(dataFile)){
       const base = createBaseDb();
       fs.writeFileSync(dataFile, JSON.stringify(base, null, 2), "utf8");
-      return base;
+      cachedDb = normalizeDb(base);
+      dbLoaded = true;
+      return cachedDb;
     }
     try{
       const raw = fs.readFileSync(dataFile, "utf8");
-      return normalizeDb(raw ? JSON.parse(raw) : createBaseDb());
+      cachedDb = normalizeDb(raw ? JSON.parse(raw) : createBaseDb());
     } catch {
       const base = createBaseDb();
       fs.writeFileSync(dataFile, JSON.stringify(base, null, 2), "utf8");
-      return base;
+      cachedDb = normalizeDb(base);
+    }
+    dbLoaded = true;
+    return cachedDb;
+  }
+
+  function flushDbNow(){
+    const snapshot = normalizeDb(cachedDb || createBaseDb());
+    ensureDataDir();
+    fs.writeFileSync(dataFile, JSON.stringify(snapshot, null, 2), "utf8");
+    cachedDb = snapshot;
+    dbLoaded = true;
+  }
+
+  function scheduleDbFlush({ immediate = false } = {}){
+    if (immediate){
+      if (flushTimer){
+        clearTimeout(flushTimer);
+        flushTimer = null;
+      }
+      flushDbNow();
+      return;
+    }
+    if (flushTimer) return;
+    flushTimer = setTimeout(() => {
+      flushTimer = null;
+      try{
+        flushDbNow();
+      } catch (err){
+        console.error("[mfas-pdv] falha ao persistir base:", err);
+      }
+    }, DB_FLUSH_DELAY_MS);
+    if (typeof flushTimer.unref === "function") flushTimer.unref();
+  }
+
+  function saveDb(db, opts = {}){
+    cachedDb = normalizeDb(db);
+    dbLoaded = true;
+    scheduleDbFlush(opts);
+  }
+
+  function flushDbOnShutdown(){
+    if (!dbLoaded || !cachedDb) return;
+    try{
+      flushDbNow();
+    } catch (err){
+      console.error("[mfas-pdv] falha ao finalizar persistência:", err);
     }
   }
 
-  function saveDb(db){
-    ensureDataDir();
-    fs.writeFileSync(dataFile, JSON.stringify(normalizeDb(db), null, 2), "utf8");
-  }
+  process.once("beforeExit", flushDbOnShutdown);
+  process.once("SIGTERM", () => {
+    flushDbOnShutdown();
+    process.exit(0);
+  });
+  process.once("SIGINT", () => {
+    flushDbOnShutdown();
+    process.exit(0);
+  });
 
   function sendJson(res, statusCode, data, extraHeaders = {}){
     res.writeHead(statusCode, {

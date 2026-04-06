@@ -331,6 +331,19 @@
     // ===== Mesas/Cozinha/Delivery =====
     let opsPoll = null;
     let deliveryPoll = null;
+    let opsLoadPromise = null;
+    let receivablesLoadPromise = null;
+    let deliveryLoadPromise = null;
+    let expensesLoadPromise = null;
+    const OPS_POLL_MS = 15000;
+    const DELIVERY_POLL_MS = 15000;
+    const EXPENSES_POLL_MS = 12000;
+
+    function shouldRunLiveRefresh(){
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return false;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
+      return true;
+    }
 
     function prettyType(t){
       const raw = String(t || "").trim();
@@ -569,12 +582,15 @@
       }).join("");
     }
 
-    async function loadOpsData(){
+    async function loadOpsData(opts = {}){
       if (!els.opsTables || !els.opsKitchen) return;
+      const silent = !!opts.silent;
+      if (opsLoadPromise) return opsLoadPromise;
 
       const refreshBtns = [els.opsTablesRefresh, els.opsKitchenRefresh].filter(Boolean);
-      try{
-        refreshBtns.forEach(b => setButtonLoading(b, true));
+      opsLoadPromise = (async () => {
+        try{
+          if (!silent) refreshBtns.forEach(b => setButtonLoading(b, true));
         const today = todayISODate();
         const [tResp, kResp] = await Promise.all([
           fetch("/api/tables/open"),
@@ -617,13 +633,21 @@
         renderOpsTables(rows);
         renderOpsKitchen(kData?.rows || []);
         renderOpsKitchenHistory(historyData?.rows || []);
-      } catch (e){
-        els.opsTables.innerHTML = `<div class="opsEmpty">Falha ao carregar mesas</div>`;
-        els.opsKitchen.innerHTML = `<div class="opsEmpty">Falha ao carregar cozinha</div>`;
-        if (els.opsKitchenHistory) els.opsKitchenHistory.innerHTML = `<div class="opsEmpty">Falha ao carregar histórico</div>`;
-        logError("Falha ao carregar OPS", e);
+        } catch (e){
+          if (!silent){
+            els.opsTables.innerHTML = `<div class="opsEmpty">Falha ao carregar mesas</div>`;
+            els.opsKitchen.innerHTML = `<div class="opsEmpty">Falha ao carregar cozinha</div>`;
+            if (els.opsKitchenHistory) els.opsKitchenHistory.innerHTML = `<div class="opsEmpty">Falha ao carregar histórico</div>`;
+          }
+          logError("Falha ao carregar OPS", e);
+        } finally {
+          if (!silent) refreshBtns.forEach(b => setButtonLoading(b, false));
+        }
+      })();
+      try{
+        return await opsLoadPromise;
       } finally {
-        refreshBtns.forEach(b => setButtonLoading(b, false));
+        opsLoadPromise = null;
       }
     }
 
@@ -700,19 +724,28 @@
       }).join("");
     }
 
-    async function loadReceivablesData(){
+    async function loadReceivablesData(opts = {}){
       if (!els.receivableList) return;
-      try{
-        setButtonLoading(els.receivableRefresh, true);
+      const silent = !!opts.silent;
+      if (receivablesLoadPromise) return receivablesLoadPromise;
+      receivablesLoadPromise = (async () => {
+        try{
+        if (!silent) setButtonLoading(els.receivableRefresh, true);
         const resp = await fetch("/api/receivables/open");
         const data = await resp.json().catch(() => null);
         if (!resp.ok || data?.ok === false) throw new Error(data?.error || "Erro ao carregar contas");
         renderReceivables(data?.rows || []);
-      } catch (e){
-        els.receivableList.innerHTML = `<div class="opsEmpty">Falha ao carregar contas a receber</div>`;
-        logError("Falha ao carregar contas a receber", e);
+        } catch (e){
+          if (!silent) els.receivableList.innerHTML = `<div class="opsEmpty">Falha ao carregar contas a receber</div>`;
+          logError("Falha ao carregar contas a receber", e);
+        } finally {
+          if (!silent) setButtonLoading(els.receivableRefresh, false);
+        }
+      })();
+      try{
+        return await receivablesLoadPromise;
       } finally {
-        setButtonLoading(els.receivableRefresh, false);
+        receivablesLoadPromise = null;
       }
     }
 
@@ -882,15 +915,16 @@
     }
 
     function pollOpsViews(){
+      if (!shouldRunLiveRefresh()) return;
       const opsOpen = (els.opsTablesModal && els.opsTablesModal.style.display === "flex")
         || (els.opsKitchenModal && els.opsKitchenModal.style.display === "flex");
-      if (opsOpen) loadOpsData();
-      if (els.receivableModal && els.receivableModal.style.display === "flex") loadReceivablesData();
+      if (opsOpen) loadOpsData({ silent: true });
+      if (els.receivableModal && els.receivableModal.style.display === "flex") loadReceivablesData({ silent: true });
     }
 
     function startOpsPolling(){
       if (opsPoll) clearInterval(opsPoll);
-      opsPoll = setInterval(pollOpsViews, 8000);
+      opsPoll = setInterval(pollOpsViews, OPS_POLL_MS);
     }
 
     function openOpsTablesModal(){
@@ -935,7 +969,10 @@
       els.deliveryModal.style.display = "flex";
       loadDeliveryData();
       if (deliveryPoll) clearInterval(deliveryPoll);
-      deliveryPoll = setInterval(loadDeliveryData, 8000);
+      deliveryPoll = setInterval(() => {
+        if (!shouldRunLiveRefresh()) return;
+        loadDeliveryData({ silent: true });
+      }, DELIVERY_POLL_MS);
     }
 
     function closeDeliveryModal(){
@@ -1133,10 +1170,13 @@
       }).join("");
     }
 
-    async function loadDeliveryData(){
+    async function loadDeliveryData(opts = {}){
       if (!els.deliveryList) return;
-      try{
-        setButtonLoading(els.deliveryRefresh, true);
+      const silent = !!opts.silent;
+      if (deliveryLoadPromise) return deliveryLoadPromise;
+      deliveryLoadPromise = (async () => {
+        try{
+        if (!silent) setButtonLoading(els.deliveryRefresh, true);
         const today = todayISODate();
         const [resp, historyResp] = await Promise.all([
           fetch("/api/delivery/pending"),
@@ -1148,12 +1188,20 @@
         if (!historyResp.ok || historyData?.ok === false) throw new Error(historyData?.error || "Erro ao carregar histórico do delivery");
         renderDelivery(data?.rows || []);
         renderDeliveryHistory(historyData?.rows || []);
-      } catch (e){
-        els.deliveryList.innerHTML = `<div class="opsEmpty">Falha ao carregar deliveries</div>`;
-        if (els.deliveryHistoryList) els.deliveryHistoryList.innerHTML = `<div class="opsEmpty">Falha ao carregar histórico</div>`;
-        logError("Falha ao carregar Delivery", e);
+        } catch (e){
+          if (!silent){
+            els.deliveryList.innerHTML = `<div class="opsEmpty">Falha ao carregar deliveries</div>`;
+            if (els.deliveryHistoryList) els.deliveryHistoryList.innerHTML = `<div class="opsEmpty">Falha ao carregar histórico</div>`;
+          }
+          logError("Falha ao carregar Delivery", e);
+        } finally {
+          if (!silent) setButtonLoading(els.deliveryRefresh, false);
+        }
+      })();
+      try{
+        return await deliveryLoadPromise;
       } finally {
-        setButtonLoading(els.deliveryRefresh, false);
+        deliveryLoadPromise = null;
       }
     }
 
@@ -1341,8 +1389,9 @@
           expensesPoll = null;
           return;
         }
+        if (!shouldRunLiveRefresh()) return;
         loadExpensesData({ silent: true });
-      }, 4000);
+      }, EXPENSES_POLL_MS);
     }
 
     function stopExpensesLiveUpdates(){
@@ -1534,19 +1583,31 @@
     async function loadExpensesData(opts = {}){
       if (!els.expensesList) return;
       const silent = !!opts.silent;
-      try{
+      if (expensesLoadPromise) return expensesLoadPromise;
+      expensesLoadPromise = (async () => {
+        try{
         if (!silent) setButtonLoading(els.expensesRefresh, true);
         const resp = await fetch("/api/cash/movements");
         const data = await resp.json().catch(() => null);
         if (!resp.ok || data?.ok === false) throw new Error(data?.error || "Erro ao carregar movimentações");
         renderExpensesSummary(data);
         renderExpensesList(data?.rows || []);
-      } catch (e){
-        renderExpensesSummary({});
-        els.expensesList.innerHTML = `<div class="opsEmpty">Falha ao carregar movimentações</div>`;
-        toast("Falha ao carregar despesas: " + e.message, "error", { detail: e?.stack || e?.message });
+        } catch (e){
+          if (!silent){
+            renderExpensesSummary({});
+            els.expensesList.innerHTML = `<div class="opsEmpty">Falha ao carregar movimentações</div>`;
+            toast("Falha ao carregar despesas: " + e.message, "error", { detail: e?.stack || e?.message });
+          } else {
+            logError("Falha silenciosa ao carregar despesas", e);
+          }
+        } finally {
+          if (!silent) setButtonLoading(els.expensesRefresh, false);
+        }
+      })();
+      try{
+        return await expensesLoadPromise;
       } finally {
-        if (!silent) setButtonLoading(els.expensesRefresh, false);
+        expensesLoadPromise = null;
       }
     }
 
@@ -1651,5 +1712,15 @@
       if (e.target === els.expensesModal) closeExpensesModal();
     });
     syncExpenseTypeUi();
+
+    document.addEventListener("visibilitychange", () => {
+      if (!shouldRunLiveRefresh()) return;
+      if (opsAnyOpen()) pollOpsViews();
+      if (els.deliveryModal && els.deliveryModal.style.display === "flex") loadDeliveryData({ silent: true });
+      if (expensesAnyOpen()){
+        if (typeof loadCashModalStatus === "function") loadCashModalStatus();
+        loadExpensesData({ silent: true });
+      }
+    });
 
     

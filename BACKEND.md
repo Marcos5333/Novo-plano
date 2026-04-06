@@ -52,7 +52,7 @@ Assim você migra os dados locais para o servidor sem alterar o frontend.
 
 O projeto já está preparado para a Railway com:
 
-- `npm start` como comando de inicialização
+- `node server/server.js` como comando de inicialização na Railway
 - `railway.json` com healthcheck em `/health`
 - uso automático do volume da Railway quando `RAILWAY_VOLUME_MOUNT_PATH` estiver disponível
 
@@ -63,6 +63,11 @@ O projeto já está preparado para a Railway com:
 3. Ao criar o serviço, deixe a Railway detectar como app Node.
 4. Depois do primeiro deploy, adicione um `Volume`.
 5. Monte o volume no serviço.
+
+Observação:
+
+- localmente você pode continuar usando `npm start`
+- na Railway o projeto sobe direto com `node server/server.js`, o que evita logs confusos do `npm` durante reinícios e redeploys
 
 ### Persistência
 
