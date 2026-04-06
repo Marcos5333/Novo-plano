@@ -1388,66 +1388,6 @@
       #accessLoginModal .accessHero{ display:none; }
       #accessLoginModal .accessCard{ grid-column: 1; grid-row: 1; min-height:auto; }
     }
-    @media (max-width: 560px){
-      #accessLoginModal{
-        padding:12px;
-        --access-card-w:min(100%, 340px);
-        align-items:center;
-        justify-content:center;
-      }
-      #accessLoginModal .accessLayout{
-        width:min(100%, 340px);
-        max-width:340px;
-        min-height:calc(100vh - 24px);
-        min-height:calc(100dvh - 24px);
-        align-content:center;
-        justify-items:stretch;
-        gap:12px;
-        padding:0;
-      }
-      #accessLoginModal .accessCard{
-        width:100%;
-        max-width:100%;
-        margin:0 auto;
-        min-height:auto;
-        border-radius:18px;
-      }
-      #accessLoginModal .accessCardHead{
-        padding:16px 14px 0 14px;
-      }
-      #accessLoginModal #accessLoginTitle{
-        font-size:20px;
-      }
-      #accessLoginModal .accessCardSub{
-        font-size:11px;
-      }
-      #accessLoginModal .accessCardBody{
-        padding:14px;
-        gap:10px;
-        align-content:start;
-      }
-      #accessSignupModal{
-        padding:12px;
-      }
-      #accessSignupModal .accessCard{
-        width:100%;
-        max-width:100%;
-        border-radius:18px;
-      }
-      #accessSignupModal .accessCardHead{
-        padding:16px 14px 0 14px;
-      }
-      #accessSignupModal #accessSignupTitle{
-        font-size:20px;
-      }
-      #accessSignupModal .accessCardSub{
-        font-size:11px;
-      }
-      #accessSignupModal .accessCardBody{
-        padding:14px;
-        gap:10px;
-      }
-    }
     #accessLoginModal .accessHero{
       color:#e5e7eb;
     }
@@ -2624,10 +2564,7 @@
     .deliveryCard{
       display:grid;
       align-content:start;
-      justify-items:stretch;
       gap:8px;
-      width:100%;
-      box-sizing:border-box;
       border-radius:22px;
       background: linear-gradient(180deg, #ffffff, #fbfdff);
       border:1px solid rgba(148,163,184,.22);
@@ -2681,12 +2618,7 @@
       color:#64748b;
     }
     .deliveryCard .miniBtn{
-      display:flex;
-      align-items:center;
       width:100%;
-      max-width:none;
-      align-self:stretch;
-      justify-self:stretch;
       justify-content:center;
       margin-top:4px;
     }
