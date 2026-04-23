@@ -1340,6 +1340,7 @@
       align-items:stretch;
       justify-content:center;
       background: var(--login-bg);
+      overflow-y:auto;
     }
     html.access-locked #accessLoginModal{
       display:flex;
@@ -1374,20 +1375,6 @@
     #accessLoginModal .accessHeroCopy{ grid-column: 1; grid-row: 1; }
     #accessLoginModal .accessHeroArt{ grid-column: 1; grid-row: 2; }
     #accessLoginModal .accessCard{ grid-column: 2; grid-row: 2; }
-    @media (max-width: 920px){
-      #accessLoginModal{ padding:18px; }
-      #accessLoginModal .accessLayout{
-        min-height:auto;
-        grid-template-columns: 1fr;
-        grid-template-rows: auto;
-        align-items:start;
-        align-content:center;
-        gap:18px;
-        padding:0;
-      }
-      #accessLoginModal .accessHero{ display:none; }
-      #accessLoginModal .accessCard{ grid-column: 1; grid-row: 1; min-height:auto; }
-    }
     #accessLoginModal .accessHero{
       color:#e5e7eb;
     }
@@ -1569,6 +1556,118 @@
       border-color: rgba(255,77,109,.55);
       background: rgba(255,77,109,.12);
     }
+    @media (max-width: 920px){
+      #accessLoginModal{
+        padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+        align-items:center;
+        justify-content:center;
+      }
+      #accessLoginModal .accessLayout{
+        width:min(420px, 100%);
+        min-height:calc(100dvh - 20px);
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
+        align-items:start;
+        align-content:center;
+        justify-items:center;
+        gap:0;
+        padding:0;
+      }
+      #accessLoginModal .accessHero{ display:none; }
+      #accessLoginModal .accessCard{
+        grid-column: 1;
+        grid-row: 1;
+        width:100%;
+        max-width:420px;
+        min-height:auto;
+        max-height:calc(100dvh - 20px);
+        border-radius:18px;
+      }
+      #accessLoginModal .accessCardHead{
+        padding:14px 14px 0 14px;
+        gap:4px;
+      }
+      #accessLoginModal #accessLoginTitle{
+        font-size:20px;
+      }
+      #accessLoginModal .accessCardSub{
+        font-size:11px;
+      }
+      #accessLoginModal .accessCardBody{
+        padding:14px;
+        gap:10px;
+        align-content:start;
+        min-height:0;
+        overflow-y:auto;
+        overscroll-behavior:contain;
+        -webkit-overflow-scrolling:touch;
+      }
+      #accessLoginModal .formGrid{
+        grid-template-columns: 1fr 1fr;
+        gap:8px;
+      }
+      #accessLoginModal label{
+        font-size:11px;
+      }
+      #accessLoginModal input{
+        min-height:44px;
+        padding:10px 12px;
+        font-size:16px;
+        border-radius:12px;
+      }
+      #accessLoginModal .btn,
+      #accessLoginModal .btnGhost{
+        min-height:44px;
+        padding:10px 12px;
+        border-radius:12px;
+        font-size:13px;
+        letter-spacing:0;
+      }
+      #accessLoginModal .diagBox{
+        padding:9px 10px;
+        font-size:12px;
+        line-height:1.35;
+      }
+      #accessLoginModal .accessHelperRow{
+        min-height:18px;
+        margin-top:0;
+      }
+      #accessLoginModal .accessTextBtn,
+      #accessLoginModal .hint{
+        font-size:12px;
+        line-height:1.35;
+      }
+    }
+    @media (max-width: 340px){
+      #accessLoginModal .formGrid{
+        grid-template-columns:1fr;
+      }
+    }
+    @media (max-width: 920px) and (max-height: 620px){
+      #accessLoginModal .accessLayout{
+        align-content:start;
+      }
+      #accessLoginModal .accessCardHead{
+        padding-top:10px;
+      }
+      #accessLoginModal .accessCardBody{
+        padding:10px 12px 12px 12px;
+        gap:8px;
+      }
+      #accessLoginModal #accessLoginTitle{
+        font-size:18px;
+      }
+      #accessLoginModal input,
+      #accessLoginModal .btn,
+      #accessLoginModal .btnGhost{
+        min-height:40px;
+        padding-top:8px;
+        padding-bottom:8px;
+      }
+      #accessLoginModal .hint{
+        display:none;
+      }
+    }
     #accessSignupModal{
       z-index:3100;
       align-items:center;
@@ -1666,6 +1765,69 @@
     }
     #accessSignupModal .hint{
       text-align:center;
+    }
+    @media (max-width: 520px){
+      #accessSignupModal{
+        padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+      }
+      #accessSignupModal .accessCard{
+        width:100%;
+        max-width:420px;
+        max-height:calc(100dvh - 20px);
+        border-radius:18px;
+      }
+      #accessSignupModal .accessCardHead{
+        padding:14px 14px 0 14px;
+        gap:4px;
+      }
+      #accessSignupModal #accessSignupTitle{
+        font-size:20px;
+      }
+      #accessSignupModal .accessCardSub{
+        font-size:11px;
+      }
+      #accessSignupModal .accessCardBody{
+        padding:14px;
+        gap:10px;
+      }
+      #accessSignupModal label{
+        font-size:11px;
+      }
+      #accessSignupModal input{
+        min-height:44px;
+        padding:10px 12px;
+        font-size:16px;
+        border-radius:12px;
+      }
+      #accessSignupModal .btn,
+      #accessSignupModal .btnGhost{
+        min-height:44px;
+        padding:10px 12px;
+        border-radius:12px;
+        font-size:13px;
+        letter-spacing:0;
+      }
+      #accessSignupModal .diagBox,
+      #accessSignupModal .hint{
+        font-size:12px;
+        line-height:1.35;
+      }
+    }
+    @media (max-width: 520px) and (max-height: 680px){
+      #accessSignupModal .accessCardHead{
+        padding-top:10px;
+      }
+      #accessSignupModal .accessCardBody{
+        padding:10px 12px 12px 12px;
+        gap:8px;
+      }
+      #accessSignupModal input,
+      #accessSignupModal .btn,
+      #accessSignupModal .btnGhost{
+        min-height:40px;
+        padding-top:8px;
+        padding-bottom:8px;
+      }
     }
     #confirmModal,
     #choiceModal{
